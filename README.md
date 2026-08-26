@@ -4,10 +4,13 @@ Talk to **Mira**, a late-night radio DJ. Ask her to play something. Talk over he
 
 Built on the **Gemini Live API** with the raw `google-genai` SDK — no agent framework, so you can see the whole primitive. This is the demo from **EP1 of the Multimodal Agents Cookbook**.
 
-```
-browser ──(mic · 16 kHz PCM)──►  FastAPI /ws  ──►  client.aio.live.connect()  ──►  Gemini Live
-        ◄──(voice · 24 kHz PCM · transcripts · play commands)──┘                    (native audio)
-```
+![live-dj](docs/screenshot.png)
+
+## How it works
+
+![architecture](docs/architecture.png)
+
+The browser owns the audio (mic worklet down to 16 kHz, 24 kHz playback, barge-in). The server owns the socket — one `client.aio.live.connect()` session per browser, two asyncio tasks. The model owns the turn.
 
 ## The two files that matter
 

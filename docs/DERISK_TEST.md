@@ -13,7 +13,7 @@ Run the app (see `README.md`), then confirm these. They're what tell us EP1 is r
 | 7 | **Line count** | `wc -l backend/raw_server.py backend/tools.py` | the honest number for the title |
 
 ## Most likely things to need a tweak
-- **Auth** — the reused key is `AQ.`-prefixed (unusual for AI Studio). If #1 errors, that's the suspect — try a standard `AIza…` key or Vertex.
+- **Auth** — if #1 errors, check the key: use a Gemini Developer API (AI Studio) key with `GOOGLE_GENAI_USE_VERTEXAI=FALSE`, or switch to Vertex.
 - **Model** — `gemini-3.1-flash-live-preview`. If it 404s, check the current Live model name.
 - **Voice** — `LIVE_VOICE=Aoede`. Swap in `.env` if a different native voice suits Mira better.
 - **Audio garbled** — the mic resample (`pcm-processor.js`) assumes the context rate; report the browser + sample rate.

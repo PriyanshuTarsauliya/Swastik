@@ -1,9 +1,9 @@
 # live-dj — Engineering Design Doc
 
-**Author:** TBD
+**Author:** cuppibla
 **Status:** Draft v0.2
 **Last updated:** 2026-06-06
-**Reviewers:** TBD
+**Reviewers:** —
 
 ---
 

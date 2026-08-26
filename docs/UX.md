@@ -1,6 +1,6 @@
 # live-dj — UX Design Doc
 
-**Designer:** TBD
+**Designer:** cuppibla
 **Status:** Draft v0.1
 **Last updated:** 2026-06-06
 

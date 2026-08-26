@@ -1,6 +1,6 @@
 # live-dj — Product Design Doc
 
-**Author:** TBD
+**Author:** cuppibla
 **Status:** Draft v0.1
 **Last updated:** 2026-06-06
 **One-liner:** Turn a one-way AI radio into a DJ you can talk to — and tell what to play.
