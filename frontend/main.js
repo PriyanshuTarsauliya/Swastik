@@ -1,114 +1,822 @@
-// live-dj — minimal test client (Phase 1).
-// The polished UI is aniradio's Next.js room (next step). This is enough to RUN the de-risk:
-// talk to Mira, hear her back, interrupt her, and ask her to play music.
+// Dr. Gunja Gupta — Hyper-Futuristic AI Voice Receptionist Engine
+// Enhanced Edition: Shockwaves, Lightning, Particles, Chimes & Thinking
 
 const $ = (id) => document.getElementById(id);
-const orb = $("orb"), statusEl = $("status"), nowEl = $("nowplaying"), txEl = $("transcript");
-const music = $("music");
+const canvas = $("orbCanvas");
+const ctx = canvas.getContext("2d");
 
-const BARGE_RMS = 0.02;
-let ws, audioCtx, workletNode, micStream;
+const stageBadgeText = $("stageBadgeText");
+const calendarCard = $("calendarCard");
+const waCard = $("waCard");
+const waText = $("waText");
+const slotsContainer = $("slotsContainer");
+const speakerTag = $("speakerTag");
+const subMain = $("subMain");
+const subTrans = $("subTrans");
+const callBtn = $("callBtn");
+const callBtnText = $("callBtnText");
+const callBtnIcon = $("callBtnIcon");
+const connLabel = $("connLabel");
+const statusDot = $("statusDot");
+const waveBars = document.querySelectorAll(".wave-bar");
+const liveClock = $("liveClock");
+const callTimer = $("callTimer");
+
+// Audio & WebSocket state
+let ws = null;
+let audioCtx = null;
+let workletNode = null;
+let micStream = null;
 let nextStart = 0;
 let activeSources = [];
 let speaking = false;
-let duckTimer = null;
-let tracks = [];
-let queue = [];
-let qi = 0;
+let userRMS = 0;
+let isCallActive = false;
 
-function setOrb(state) { orb.className = "orb " + state; }       // idle | listening | thinking | speaking
-function setStatus(t) { statusEl.textContent = t; }
-function addLine(role, text) {
-  const p = document.createElement("div");
-  p.className = "line " + role;
-  p.textContent = (role === "mira" ? "mira  " : "you  ") + text;
-  txEl.appendChild(p); txEl.scrollTop = txEl.scrollHeight;
-}
+// Anti-Glitch Audio Gain & Sinks
+let voiceGain = null;
+let silentSink = null;
+let speechFrameCount = 0;
+const BARGE_THRESHOLD = 0.06;
 
-// ---------- music player (driven by Mira's tool calls) ----------
-async function loadTracks() {
-  try { tracks = await (await fetch("/assets/tracks.json")).json(); } catch { tracks = []; }
-}
-function startQueue(list) {
-  queue = list.length ? list : tracks;
-  qi = 0;
-  if (queue.length) { music.src = "/assets/" + queue[0].file; music.volume = 1; music.play().catch(() => {}); setNow(queue[0]); }
-}
-function setNow(t) { nowEl.textContent = t ? `now playing · ${t.title} — ${t.artist || ""}` : ""; }
-function handlePlay(cmd) {
-  if (cmd.action === "playlist") startQueue(tracks);                       // one vibe (all dream pop here)
-  else if (cmd.action === "track") {
-    const t = tracks.find((x) => x.title.toLowerCase().includes((cmd.value || "").toLowerCase()));
-    startQueue(t ? [t] : tracks);
-  } else if (cmd.action === "skip") { qi = (qi + 1) % Math.max(1, queue.length); if (queue[qi]) { music.src = "/assets/" + queue[qi].file; music.play().catch(() => {}); setNow(queue[qi]); } }
-  else if (cmd.action === "pause") { music.paused ? music.play().catch(() => {}) : music.pause(); }
-}
-function duck() {                                                          // music down while Mira talks
-  music.volume = 0.12;
-  if (duckTimer) clearTimeout(duckTimer);
-  duckTimer = setTimeout(() => { music.volume = 1; }, 450);
+// Call timer state
+let callStartTime = 0;
+let callTimerInterval = null;
+
+// Thinking state (between user speech end and agent speech start)
+let thinkingMode = false;
+let lastUserSpeechTime = 0;
+
+function setStage(stageName) {
+  stageBadgeText.textContent = stageName.toUpperCase();
 }
 
-// ---------- voice playback (24k PCM from the server) ----------
+function setSubtitles(role, text) {
+  if (role === "swastik") {
+    speakerTag.className = "speaker-tag swastik";
+    speakerTag.textContent = "SWASTIK AI";
+    thinkingMode = false; // Agent is responding, no longer thinking
+  } else {
+    speakerTag.className = "speaker-tag patient";
+    speakerTag.textContent = "PATIENT";
+    lastUserSpeechTime = performance.now();
+  }
+
+  // Trigger subtitle fade-in animation
+  subMain.classList.remove("fade-in");
+  void subMain.offsetWidth; // force reflow
+  subMain.classList.add("fade-in");
+
+  subMain.textContent = text;
+
+  const hasDevanagari = /[\u0900-\u097F]/.test(text);
+  if (hasDevanagari) {
+    subTrans.textContent = "(English translation) " + text;
+    subTrans.style.display = "block";
+  } else {
+    subTrans.style.display = "none";
+  }
+}
+
+// ------------------------------------------------------------------
+// Live Clock & Call Timer
+// ------------------------------------------------------------------
+function updateClock() {
+  if (liveClock) {
+    const now = new Date();
+    liveClock.textContent = now.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+  }
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function startCallTimer() {
+  callStartTime = Date.now();
+  if (callTimer) callTimer.style.display = "inline";
+  callTimerInterval = setInterval(() => {
+    if (!callTimer) return;
+    const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+    const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const ss = String(elapsed % 60).padStart(2, "0");
+    callTimer.textContent = `${mm}:${ss}`;
+  }, 1000);
+}
+
+function stopCallTimer() {
+  clearInterval(callTimerInterval);
+  callTimerInterval = null;
+  if (callTimer) {
+    callTimer.textContent = "00:00";
+    callTimer.style.display = "none";
+  }
+}
+
+// ------------------------------------------------------------------
+// High-Tech Procedural Canvas Engine: Plasma Orbs & Neural Synapses
+// ------------------------------------------------------------------
+let width, height;
+let leftOrb = { x: 0, y: 0, baseRadius: 82, radius: 82, rot: 0, shockwaves: [] };
+let rightOrb = { x: 0, y: 0, baseRadius: 86, radius: 86, rot: 0, shockwaves: [] };
+let spaceParticles = [];
+let streamPhotons = [];
+
+// Celebration particles for booking burst
+let burstParticles = [];
+
+// Lightning arc state
+let lightningArcs = [];
+let lastLightningTime = 0;
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
+  canvas.style.width = width + "px";
+  canvas.style.height = height + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  leftOrb.x = width * 0.28;
+  leftOrb.y = height * 0.48;
+  rightOrb.x = width * 0.72;
+  rightOrb.y = height * 0.48;
+
+  const badgeContainer = $("stageBadgeContainer");
+  if (badgeContainer) {
+    badgeContainer.style.left = `${leftOrb.x}px`;
+    badgeContainer.style.top = `${leftOrb.y - leftOrb.baseRadius - 45}px`;
+  }
+}
+window.addEventListener("resize", resize);
+
+// Ambient Floating Cosmic Dust
+for (let i = 0; i < 65; i++) {
+  spaceParticles.push({
+    x: Math.random() * 2000,
+    y: Math.random() * 1200,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    size: Math.random() * 1.8 + 0.5,
+    alpha: Math.random() * 0.5 + 0.1,
+  });
+}
+
+// Quantum Photons along Neural Synapse
+for (let i = 0; i < 45; i++) {
+  streamPhotons.push({
+    progress: Math.random(),
+    speed: Math.random() * 0.004 + 0.0015,
+    strand: Math.floor(Math.random() * 3),
+    size: Math.random() * 2.2 + 1,
+    alpha: Math.random() * 0.8 + 0.2,
+  });
+}
+
+// ------------------------------------------------------------------
+// Shockwave Pulse System
+// ------------------------------------------------------------------
+function triggerShockwave(orb) {
+  orb.shockwaves.push({ r: orb.baseRadius * 0.9, alpha: 0.7, speed: 2.5 });
+}
+
+function drawShockwaves(orb, isPatient) {
+  const color = isPatient ? "245, 166, 35" : "20, 200, 178";
+  orb.shockwaves.forEach((sw) => {
+    sw.r += sw.speed;
+    sw.alpha -= 0.012;
+    if (sw.alpha <= 0) return;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(${color}, ${sw.alpha.toFixed(3)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, sw.r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Inner glow ring
+    ctx.strokeStyle = `rgba(${color}, ${(sw.alpha * 0.4).toFixed(3)})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, sw.r - 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+  orb.shockwaves = orb.shockwaves.filter((sw) => sw.alpha > 0);
+}
+
+// ------------------------------------------------------------------
+// Lightning Arc System
+// ------------------------------------------------------------------
+function generateLightningPath(x1, y1, x2, y2, segments) {
+  const points = [{ x: x1, y: y1 }];
+  for (let i = 1; i < segments; i++) {
+    const t = i / segments;
+    const mx = x1 + (x2 - x1) * t;
+    const my = y1 + (y2 - y1) * t;
+    const jitter = (1 - Math.abs(t - 0.5) * 2) * 35;
+    points.push({
+      x: mx + (Math.random() - 0.5) * jitter,
+      y: my + (Math.random() - 0.5) * jitter,
+    });
+  }
+  points.push({ x: x2, y: y2 });
+  return points;
+}
+
+function spawnLightning() {
+  const sx = leftOrb.x + leftOrb.baseRadius;
+  const ex = rightOrb.x - rightOrb.baseRadius;
+  const segments = 12 + Math.floor(Math.random() * 6);
+  lightningArcs.push({
+    points: generateLightningPath(sx, leftOrb.y, ex, rightOrb.y, segments),
+    alpha: 0.8,
+    width: Math.random() * 1.5 + 0.5,
+  });
+}
+
+function drawLightning() {
+  lightningArcs.forEach((arc) => {
+    arc.alpha -= 0.04;
+    if (arc.alpha <= 0) return;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(100, 240, 255, ${arc.alpha.toFixed(3)})`;
+    ctx.lineWidth = arc.width;
+    ctx.shadowColor = "rgba(100, 240, 255, 0.6)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(arc.points[0].x, arc.points[0].y);
+    for (let i = 1; i < arc.points.length; i++) {
+      ctx.lineTo(arc.points[i].x, arc.points[i].y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
+  lightningArcs = lightningArcs.filter((a) => a.alpha > 0);
+}
+
+// ------------------------------------------------------------------
+// Booking Celebration Particle Burst
+// ------------------------------------------------------------------
+function triggerBookingBurst() {
+  const cx = rightOrb.x;
+  const cy = rightOrb.y;
+  for (let i = 0; i < 40; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 1.5;
+    burstParticles.push({
+      x: cx,
+      y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      alpha: 1.0,
+      size: Math.random() * 3 + 1,
+      color: Math.random() > 0.5 ? "20, 200, 178" : "110, 231, 183",
+    });
+  }
+  triggerShockwave(rightOrb);
+  triggerShockwave(leftOrb);
+}
+
+function drawBurstParticles() {
+  burstParticles.forEach((p) => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+    p.alpha -= 0.012;
+    if (p.alpha <= 0) return;
+
+    ctx.save();
+    ctx.fillStyle = `rgba(${p.color}, ${p.alpha.toFixed(3)})`;
+    ctx.shadowColor = `rgba(${p.color}, ${(p.alpha * 0.5).toFixed(3)})`;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+  burstParticles = burstParticles.filter((p) => p.alpha > 0);
+}
+
+// ------------------------------------------------------------------
+// Thinking Indicator (pulsing glow on Swastik orb)
+// ------------------------------------------------------------------
+function drawThinkingIndicator(time) {
+  if (!thinkingMode) return;
+
+  const pulseAlpha = 0.15 + Math.sin(time * 0.008) * 0.1;
+  const pulseR = rightOrb.baseRadius * (1.4 + Math.sin(time * 0.005) * 0.15);
+
+  ctx.save();
+  const grad = ctx.createRadialGradient(
+    rightOrb.x, rightOrb.y, rightOrb.baseRadius * 0.8,
+    rightOrb.x, rightOrb.y, pulseR
+  );
+  grad.addColorStop(0, `rgba(20, 200, 178, ${pulseAlpha.toFixed(3)})`);
+  grad.addColorStop(0.6, `rgba(0, 229, 255, ${(pulseAlpha * 0.4).toFixed(3)})`);
+  grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(rightOrb.x, rightOrb.y, pulseR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Three small rotating dots orbiting the orb
+  for (let i = 0; i < 3; i++) {
+    const angle = time * 0.004 + (i * Math.PI * 2) / 3;
+    const orbitR = rightOrb.baseRadius * 1.25;
+    const dx = rightOrb.x + Math.cos(angle) * orbitR;
+    const dy = rightOrb.y + Math.sin(angle) * orbitR;
+    ctx.fillStyle = `rgba(20, 200, 178, ${0.6 + Math.sin(time * 0.01 + i) * 0.3})`;
+    ctx.beginPath();
+    ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ------------------------------------------------------------------
+// Cinematic Luminous 3D Spherical Orb with Concentric Ripple Rings
+// ------------------------------------------------------------------
+function drawCinematicOrb(orb, pulse, isPatient, time) {
+  const r = orb.baseRadius + pulse * 14;
+
+  // 1. Soft Ambient Atmospheric Scatter Glow
+  const diffuseGlow = ctx.createRadialGradient(orb.x, orb.y, r * 0.5, orb.x, orb.y, r * 2.8);
+  if (isPatient) {
+    diffuseGlow.addColorStop(0, `rgba(245, 166, 35, ${0.25 + pulse * 0.2})`);
+    diffuseGlow.addColorStop(0.4, `rgba(245, 166, 35, ${0.08 + pulse * 0.1})`);
+    diffuseGlow.addColorStop(0.8, "rgba(217, 119, 6, 0.02)");
+    diffuseGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  } else {
+    diffuseGlow.addColorStop(0, `rgba(20, 200, 178, ${0.3 + pulse * 0.25})`);
+    diffuseGlow.addColorStop(0.4, `rgba(0, 229, 255, ${0.09 + pulse * 0.1})`);
+    diffuseGlow.addColorStop(0.8, "rgba(13, 148, 136, 0.02)");
+    diffuseGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  }
+  ctx.fillStyle = diffuseGlow;
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, r * 2.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Multi-layered Concentric Ripple Aura Rings
+  const ringMultipliers = [1.22, 1.52, 1.9, 2.38];
+  const ringBaseAlphas = isPatient ? [0.18, 0.11, 0.06, 0.03] : [0.22, 0.13, 0.07, 0.035];
+  const ringColor = isPatient ? "245, 166, 35" : "20, 200, 178";
+
+  ringMultipliers.forEach((mult, idx) => {
+    ctx.save();
+    const breathingOffset = Math.sin(time * 0.002 + idx * 0.8) * 2;
+    const ringR = r * mult + breathingOffset + pulse * 10 * (1 - idx * 0.2);
+    const ringAlpha = Math.max(0.01, ringBaseAlphas[idx] + pulse * 0.15 * (1 - idx * 0.2));
+
+    ctx.strokeStyle = `rgba(${ringColor}, ${ringAlpha.toFixed(3)})`;
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // 3. Perfect Spherical Core with 3D Specular Highlight
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
+
+  const highlightOffsetX = orb.x;
+  const highlightOffsetY = orb.y - r * 0.1;
+  const coreGrad = ctx.createRadialGradient(
+    highlightOffsetX, highlightOffsetY, r * 0.02,
+    orb.x, orb.y, r
+  );
+
+  if (isPatient) {
+    coreGrad.addColorStop(0, "#FFFBEB");
+    coreGrad.addColorStop(0.18, "#FEF3C7");
+    coreGrad.addColorStop(0.45, "#F59E0B");
+    coreGrad.addColorStop(0.78, "#B45309");
+    coreGrad.addColorStop(0.94, "#78350F");
+    coreGrad.addColorStop(1, "#3F1D06");
+  } else {
+    coreGrad.addColorStop(0, "#D8FFFB");
+    coreGrad.addColorStop(0.18, "#6EE7B7");
+    coreGrad.addColorStop(0.45, "#14B8A6");
+    coreGrad.addColorStop(0.78, "#0F766E");
+    coreGrad.addColorStop(0.94, "#0B4E48");
+    coreGrad.addColorStop(1, "#042A27");
+  }
+
+  ctx.fillStyle = coreGrad;
+  ctx.fill();
+
+  // 4. Crisp Glowing Atmospheric Rim / Limb Stroke
+  ctx.strokeStyle = isPatient ? "rgba(255, 235, 180, 0.45)" : "rgba(110, 240, 225, 0.45)";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ------------------------------------------------------------------
+// Main Animation Loop
+// ------------------------------------------------------------------
+let lastTime = 0;
+
+function animate(time) {
+  ctx.clearRect(0, 0, width, height);
+  lastTime = time;
+
+  // Check if we should enter thinking mode
+  if (lastUserSpeechTime > 0 && !speaking && isCallActive) {
+    const elapsed = performance.now() - lastUserSpeechTime;
+    if (elapsed > 800 && elapsed < 15000) {
+      thinkingMode = true;
+    }
+  }
+
+  // 1. Ambient Floating Stardust
+  spaceParticles.forEach((p) => {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0) p.x = width;
+    if (p.x > width) p.x = 0;
+    if (p.y < 0) p.y = height;
+    if (p.y > height) p.y = 0;
+
+    ctx.fillStyle = `rgba(148, 163, 184, ${p.alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Calculate dynamic pulses
+  const userPulse = Math.min(1.2, userRMS * 8);
+  const agentPulse = speaking ? 0.35 + Math.sin(time * 0.007) * 0.2 : 0;
+
+  // Organic Floating Motion — subtle sinusoidal drift
+  const driftX = Math.sin(time * 0.0008) * 4;
+  const driftY = Math.cos(time * 0.0012) * 3;
+  leftOrb.x = width * 0.28 + driftX;
+  leftOrb.y = height * 0.48 + driftY;
+  rightOrb.x = width * 0.72 - driftX * 0.7;
+  rightOrb.y = height * 0.48 - driftY * 0.6;
+
+  // 2. Straight Horizontal Axis Line between Orbs
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 5]);
+  ctx.beginPath();
+  ctx.moveTo(leftOrb.x, leftOrb.y);
+  ctx.lineTo(rightOrb.x, rightOrb.y);
+  ctx.stroke();
+  ctx.restore();
+
+  // 3. Discrete Horizontal Data Dot Chain
+  const isCommunicating = userPulse > 0.02 || speaking;
+  streamPhotons.forEach((pt) => {
+    pt.progress += pt.speed * (isCommunicating ? 2.6 : 1.0);
+    if (pt.progress > 1) pt.progress = 0;
+
+    const startX = leftOrb.x + leftOrb.baseRadius;
+    const endX = rightOrb.x - rightOrb.baseRadius;
+    const px = startX + (endX - startX) * pt.progress;
+    const py = leftOrb.y;
+
+    const isNearAgent = pt.progress > 0.5;
+    const dotColor = isNearAgent ? `rgba(180, 255, 245, ${pt.alpha})` : `rgba(255, 230, 160, ${pt.alpha})`;
+
+    ctx.fillStyle = dotColor;
+    ctx.beginPath();
+    ctx.arc(px, py, pt.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 4. Lightning Arcs (spawn during active communication)
+  if (isCommunicating && time - lastLightningTime > 300 + Math.random() * 700) {
+    spawnLightning();
+    lastLightningTime = time;
+  }
+  drawLightning();
+
+  // 5. Render Spherical Orbs
+  drawCinematicOrb(leftOrb, userPulse, true, time);
+  drawCinematicOrb(rightOrb, agentPulse, false, time);
+
+  // 6. Draw Shockwaves
+  drawShockwaves(leftOrb, true);
+  drawShockwaves(rightOrb, false);
+
+  // 7. Thinking Indicator
+  drawThinkingIndicator(time);
+
+  // 8. Burst Particles
+  drawBurstParticles();
+
+  // 9. Update Mini Waveform Equalizer Bars
+  if (waveBars && waveBars.length) {
+    const activeLevel = speaking ? agentPulse : userPulse;
+    waveBars.forEach((bar, idx) => {
+      const h = Math.max(
+        3,
+        Math.min(14, 3 + activeLevel * 10 * Math.sin(time * 0.01 + idx))
+      );
+      bar.style.height = `${h}px`;
+      bar.style.background = speaking ? "#14C8B2" : "#F5A623";
+    });
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ----------------------------------------------------
+// Tool Action Handlers & HUD Card Animations
+// ----------------------------------------------------
+function handleToolAction(cmd) {
+  if (cmd.action === "show_calendar") {
+    setStage("READING REAL SLOTS");
+    calendarCard.classList.add("visible");
+
+    if (cmd.slots && slotsContainer) {
+      updateSlotsUI(cmd.slots);
+    }
+  } else if (cmd.action === "booking_confirmed") {
+    setStage("WRITTEN TO THE CALENDAR");
+    calendarCard.classList.add("visible");
+
+    const mode = (cmd.data && cmd.data.consultation_mode) ? cmd.data.consultation_mode.toUpperCase() : "ONLINE";
+
+    if (cmd.slots && slotsContainer) {
+      updateSlotsUI(cmd.slots);
+    }
+
+    const slot1100 = $("slot-1100");
+    if (slot1100) {
+      slot1100.className = "slot-row booked";
+      slot1100.innerHTML = `<span>11:00 · ${mode}</span><span class="badge-booked">BOOKED</span>`;
+    }
+
+    // Trigger celebration effects
+    triggerBookingBurst();
+  } else if (cmd.action === "whatsapp_send" && cmd.data) {
+    setStage("CONFIRMATION ON WHATSAPP");
+    waCard.classList.add("visible");
+    const name = cmd.data.patient_name || "Patient";
+    const slot = cmd.data.slot_time || "11:00 AM";
+    const cat = cmd.data.category || "Consultation";
+    const mode = cmd.data.consultation_mode || "Online";
+    waText.textContent = `${name} — your ${mode} appointment for ${cat} with Dr. Gunja Gupta is confirmed for tomorrow at ${slot}. Consultation fee ₹499.`;
+
+    triggerShockwave(rightOrb);
+  } else if (cmd.action === "slot_update" && cmd.slots) {
+    updateSlotsUI(cmd.slots);
+  }
+}
+
+// Dynamic slot UI update
+function updateSlotsUI(slots) {
+  if (!slotsContainer) return;
+  const slotIds = ["slot-1100", "slot-1130", "slot-1200", "slot-1230", "slot-1300"];
+  slots.forEach((slot, idx) => {
+    if (idx >= slotIds.length) return;
+    const el = $(slotIds[idx]);
+    if (!el) return;
+    if (slot.status === "BOOKED") {
+      el.className = "slot-row booked";
+      el.innerHTML = `<span>${slot.time} ${slot.type}</span><span class="badge-booked">BOOKED</span>`;
+    } else {
+      el.className = "slot-row";
+      el.innerHTML = `<span>${slot.time} ${slot.type}</span><span class="badge-free">FREE</span>`;
+    }
+  });
+}
+
+// ----------------------------------------------------
+// Connection Chime (synthesized via Web Audio oscillator)
+// ----------------------------------------------------
+function playConnectionChime() {
+  if (!audioCtx) return;
+  try {
+    const osc1 = audioCtx.createOscillator();
+    const osc2 = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc1.type = "sine";
+    osc2.type = "sine";
+
+    osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+    osc1.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.12); // E5
+    osc2.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.24); // G5
+
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.1);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc1.start(audioCtx.currentTime);
+    osc2.start(audioCtx.currentTime + 0.24);
+    osc1.stop(audioCtx.currentTime + 0.36);
+    osc2.stop(audioCtx.currentTime + 0.6);
+  } catch (e) {
+    // Silently fail — chime is decorative
+  }
+}
+
+// ----------------------------------------------------
+// Voice Playback (24kHz PCM from Gemini Live) with Anti-Glitch Gain
+// ----------------------------------------------------
 function playVoice(buf) {
+  if (!audioCtx) return;
+  if (!voiceGain) {
+    voiceGain = audioCtx.createGain();
+    voiceGain.gain.setValueAtTime(1, audioCtx.currentTime);
+    voiceGain.connect(audioCtx.destination);
+  }
+
   const int16 = new Int16Array(buf);
   const f32 = new Float32Array(int16.length);
   for (let i = 0; i < int16.length; i++) f32[i] = int16[i] / 0x8000;
   const ab = audioCtx.createBuffer(1, f32.length, 24000);
   ab.getChannelData(0).set(f32);
+
   const src = audioCtx.createBufferSource();
-  src.buffer = ab; src.connect(audioCtx.destination);
+  src.buffer = ab;
+  src.connect(voiceGain);
+
   const now = audioCtx.currentTime;
-  if (nextStart < now) nextStart = now;
-  src.start(nextStart); nextStart += ab.duration;
+  if (nextStart < now) {
+    nextStart = now + 0.04;
+  }
+  src.start(nextStart);
+  nextStart += ab.duration;
+
   activeSources.push(src);
-  src.onended = () => { activeSources = activeSources.filter((s) => s !== src); if (!activeSources.length) { speaking = false; setOrb("listening"); } };
-  speaking = true; setOrb("speaking"); duck();
-}
-function stopVoice() {                                                     // barge-in
-  activeSources.forEach((s) => { try { s.stop(); } catch {} });
-  activeSources = []; nextStart = 0; speaking = false; setOrb("listening");
+  src.onended = () => {
+    activeSources = activeSources.filter((s) => s !== src);
+    if (!activeSources.length) {
+      speaking = false;
+    }
+  };
+  speaking = true;
+  thinkingMode = false;
 }
 
-// ---------- the live socket ----------
+function stopVoice() {
+  if (!speaking && !activeSources.length) return;
+
+  if (voiceGain && audioCtx) {
+    const now = audioCtx.currentTime;
+    voiceGain.gain.cancelScheduledValues(now);
+    voiceGain.gain.setValueAtTime(voiceGain.gain.value, now);
+    voiceGain.gain.linearRampToValueAtTime(0.001, now + 0.035);
+    setTimeout(() => {
+      activeSources.forEach((s) => { try { s.stop(); } catch {} });
+      activeSources = [];
+      nextStart = 0;
+      speaking = false;
+      if (voiceGain && audioCtx) {
+        voiceGain.gain.cancelScheduledValues(audioCtx.currentTime);
+        voiceGain.gain.setValueAtTime(1, audioCtx.currentTime);
+      }
+    }, 40);
+  } else {
+    activeSources.forEach((s) => { try { s.stop(); } catch {} });
+    activeSources = [];
+    nextStart = 0;
+    speaking = false;
+  }
+}
+
+// ----------------------------------------------------
+// WebSocket Live Connection & Mic AudioWorklet
+// ----------------------------------------------------
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${proto}://${location.host}/ws`);
   ws.binaryType = "arraybuffer";
-  ws.onopen = () => { setStatus("listening…"); setOrb("listening"); };
-  ws.onclose = () => { setStatus("the line dropped — tap to reconnect"); setOrb("idle"); };
+
+  ws.onopen = () => {
+    connLabel.textContent = "CONNECTED";
+    statusDot.style.background = "#10B981";
+    setStage("WHY THEY CALLED");
+    playConnectionChime();
+  };
+
+  ws.onclose = () => {
+    connLabel.textContent = "DISCONNECTED";
+    statusDot.style.background = "#EF4444";
+    stopVoice();
+  };
+
   ws.onmessage = (evt) => {
-    if (typeof evt.data !== "string") { playVoice(evt.data); return; }     // binary = voice
-    const m = JSON.parse(evt.data);
-    if (m.type === "transcript") { if (m.role === "user") setOrb("thinking"); addLine(m.role, m.text); }
-    else if (m.type === "play") handlePlay(m);
-    else if (m.type === "interrupted") stopVoice();
-    else if (m.type === "error") { setStatus("error: " + m.message); console.error(m.message); }
+    if (typeof evt.data !== "string") {
+      playVoice(evt.data);
+      return;
+    }
+    const msg = JSON.parse(evt.data);
+    if (msg.type === "transcript") {
+      setSubtitles(msg.role, msg.text);
+      if (msg.role === "user") {
+        setStage("CALLER ASKS FOR ADVICE");
+        triggerShockwave(leftOrb);
+      }
+    } else if (msg.type === "tool_action") {
+      handleToolAction(msg);
+    } else if (msg.type === "interrupted") {
+      stopVoice();
+    }
   };
 }
 
 async function startMic() {
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   await audioCtx.audioWorklet.addModule("/pcm-processor.js");
+
+  voiceGain = audioCtx.createGain();
+  voiceGain.gain.setValueAtTime(1, audioCtx.currentTime);
+  voiceGain.connect(audioCtx.destination);
+
   micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
   });
   const source = audioCtx.createMediaStreamSource(micStream);
   workletNode = new AudioWorkletNode(audioCtx, "pcm-processor");
+
   workletNode.port.onmessage = (e) => {
-    if (ws && ws.readyState === WebSocket.OPEN) ws.send(e.data.pcm);       // 16k PCM up
-    if (e.data.rms >= BARGE_RMS && speaking) stopVoice();                  // client-side barge-in
+    userRMS = e.data.rms || 0;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(e.data.pcm);
+    }
+
+    if (userRMS >= BARGE_THRESHOLD) {
+      speechFrameCount++;
+      if (speechFrameCount >= 3 && speaking) {
+        stopVoice();
+        speechFrameCount = 0;
+      }
+    } else {
+      speechFrameCount = Math.max(0, speechFrameCount - 1);
+    }
   };
+
   source.connect(workletNode);
-  workletNode.connect(audioCtx.destination);                              // keeps the graph alive (silent)
+
+  silentSink = audioCtx.createGain();
+  silentSink.gain.value = 0;
+  silentSink.connect(audioCtx.destination);
+  workletNode.connect(silentSink);
 }
 
-async function go() {
-  $("talk").disabled = true;
-  setStatus("waking mira up…"); setOrb("thinking");
-  await loadTracks();
+function stopCall() {
+  isCallActive = false;
+  thinkingMode = false;
+  lastUserSpeechTime = 0;
+  callBtn.classList.remove("in-call");
+  callBtnIcon.textContent = "🎙";
+  callBtnText.textContent = "Start Call";
+  stopCallTimer();
+  if (micStream) {
+    micStream.getTracks().forEach((t) => t.stop());
+    micStream = null;
+  }
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  stopVoice();
+}
+
+async function startCall() {
+  isCallActive = true;
+  callBtn.classList.add("in-call");
+  callBtnIcon.textContent = "⏹";
+  callBtnText.textContent = "End Call";
   await startMic();
   connect();
-  $("talk").textContent = "● live";
+  startCallTimer();
 }
-$("talk").addEventListener("click", go);
+
+callBtn.addEventListener("click", () => {
+  if (isCallActive) {
+    stopCall();
+  } else {
+    startCall();
+  }
+});
+
+// Initialize canvas and launch motion render loop
+resize();
+requestAnimationFrame(animate);

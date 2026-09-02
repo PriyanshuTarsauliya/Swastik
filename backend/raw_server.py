@@ -1,14 +1,5 @@
-"""live-dj — the raw Gemini Live backend (EP1).
+"""Swastik Healthcare — Gemini Live voice receptionist backend."""
 
-No framework. One Gemini Live session per browser, two asyncio tasks:
-  - upstream:   browser mic (16k PCM)  -> session.send_realtime_input
-  - downstream: session.receive()      -> browser (voice bytes + transcripts + play commands)
-
-GOTCHA (the reason it dropped after one turn): session.receive() is a PER-TURN async
-generator — it ends when a turn completes. You must call it again in a loop for the next turn.
-
-Mira also CONTROLS MUSIC via function calling (tools.py), returning INSTANTLY so the voice never stalls.
-"""
 import asyncio
 import json
 import logging
@@ -24,11 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
 
-from backend.persona import MIRA_INSTRUCTION
+from backend.persona import SWASTIK_INSTRUCTION
 from backend.tools import TOOL_DECLARATIONS, dispatch_tool
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("live-dj")
+log = logging.getLogger("swastik-agent")
 
 MODEL = os.getenv("LIVE_MODEL", "gemini-3.1-flash-live-preview")
 VOICE = os.getenv("LIVE_VOICE", "Aoede")
@@ -37,14 +28,14 @@ client = genai.Client()  # reads GOOGLE_API_KEY + GOOGLE_GENAI_USE_VERTEXAI=FALS
 
 LIVE_CONFIG = {
     "response_modalities": ["AUDIO"],
-    "system_instruction": MIRA_INSTRUCTION,
+    "system_instruction": SWASTIK_INSTRUCTION,
     "input_audio_transcription": {},
     "output_audio_transcription": {},
     "speech_config": {"voice_config": {"prebuilt_voice_config": {"voice_name": VOICE}}},
     "tools": [{"function_declarations": TOOL_DECLARATIONS}],
 }
 
-app = FastAPI(title="live-dj")
+app = FastAPI(title="Swastik Healthcare Voice Agent")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 FRONTEND = Path(__file__).resolve().parents[1] / "frontend"
 ASSETS = Path(__file__).resolve().parents[1] / "assets"
@@ -56,11 +47,16 @@ async def ws(websocket: WebSocket):
     log.info("ws connected; opening Live session (model=%s, voice=%s)", MODEL, VOICE)
     try:
         async with client.aio.live.connect(model=MODEL, config=LIVE_CONFIG) as session:
-            log.info("Live session open")
+            log.info("Live session open for Swastik Healthcare")
 
             async def upstream():
                 while True:
-                    msg = await websocket.receive()
+                    try:
+                        msg = await asyncio.wait_for(websocket.receive(), timeout=300.0)
+                    except asyncio.TimeoutError:
+                        log.warning("upstream: no input for 5 minutes, closing session due to inactivity")
+                        return
+                        
                     if msg.get("type") == "websocket.disconnect":
                         log.info("upstream: browser disconnected")
                         return
@@ -79,7 +75,7 @@ async def ws(websocket: WebSocket):
                     if it and getattr(it, "text", None):
                         await websocket.send_text(json.dumps({"type": "transcript", "role": "user", "text": it.text}))
                     if ot and getattr(ot, "text", None):
-                        await websocket.send_text(json.dumps({"type": "transcript", "role": "mira", "text": ot.text}))
+                        await websocket.send_text(json.dumps({"type": "transcript", "role": "swastik", "text": ot.text}))
                     if mt and getattr(mt, "parts", None):
                         for part in mt.parts:
                             idata = getattr(part, "inline_data", None)
@@ -92,12 +88,11 @@ async def ws(websocket: WebSocket):
                     for fc in tc.function_calls:
                         cmd, result = dispatch_tool(fc.name, dict(getattr(fc, "args", None) or {}))
                         if cmd:
-                            await websocket.send_text(json.dumps({"type": "play", **cmd}))
+                            await websocket.send_text(json.dumps({"type": "tool_action", **cmd}))
                         results.append(types.FunctionResponse(id=fc.id, name=fc.name, response=result))
                     await session.send_tool_response(function_responses=results)
 
             async def downstream():
-                # session.receive() ends after each turn — loop it for the whole conversation.
                 empty = 0
                 while True:
                     got = 0
@@ -114,7 +109,7 @@ async def ws(websocket: WebSocket):
                             log.info("downstream: receive() empty %dx — session closed, ending", empty)
                             return
                     else:
-                        empty = 0  # a real turn ended; wait for the next one
+                        empty = 0
 
             up = asyncio.create_task(upstream(), name="upstream")
             down = asyncio.create_task(downstream(), name="downstream")
