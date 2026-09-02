@@ -572,6 +572,15 @@ function handleToolAction(cmd) {
     const mode = cmd.data.consultation_mode || "Online";
     waText.textContent = `${name} — your ${mode} appointment for ${cat} with Dr. Gunja Gupta is confirmed for tomorrow at ${slot}. Consultation fee ₹499.`;
 
+    const waFormLink = $("waFormLink");
+    if (waFormLink && cmd.data.form_url) waFormLink.href = cmd.data.form_url;
+    
+    const waSendBtn = $("waSendBtn");
+    if (waSendBtn && cmd.data.wa_url) {
+      waSendBtn.href = cmd.data.wa_url;
+      waSendBtn.style.display = "flex";
+    }
+
     triggerShockwave(rightOrb);
   } else if (cmd.action === "slot_update" && cmd.slots) {
     updateSlotsUI(cmd.slots);

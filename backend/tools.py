@@ -128,7 +128,17 @@ def dispatch_tool(name: str, args: dict):
         category = args.get("category", "General Health")
         consultation_mode = args.get("consultation_mode", "Online")
 
+        import urllib.parse
         form_url = "https://docs.google.com/forms/d/e/1FAIpQLScUwhHgwBxD6rYFw_G_GZKGCePkjrBqBoRSTR6Wa9SAQP_Sqg/viewform?usp=dialog"
+        message_text = f"Dr. Gunja Gupta Homeopathy Consultant: {patient_name} - your {consultation_mode} appointment for {category} is confirmed for tomorrow at {slot_time}. Consultation fee: ₹499. Please fill details & upload payment receipt screenshot here: {form_url}"
+        
+        # Clean phone number for wa.me link (remove spaces/symbols)
+        clean_phone = "".join(filter(str.isdigit, phone))
+        if not clean_phone.startswith("91") and len(clean_phone) == 10:
+            clean_phone = "91" + clean_phone
+            
+        wa_url = f"https://wa.me/{clean_phone}?text={urllib.parse.quote(message_text)}"
+
         wa_data = {
             "phone": phone,
             "patient_name": patient_name,
@@ -137,7 +147,8 @@ def dispatch_tool(name: str, args: dict):
             "consultation_mode": consultation_mode,
             "fee": "₹499",
             "form_url": form_url,
-            "message": f"Dr. Gunja Gupta Homeopathy Consultant: {patient_name} - your {consultation_mode} appointment for {category} is confirmed for tomorrow at {slot_time}. Consultation fee: ₹499. Please fill details & upload payment receipt screenshot here: {form_url}",
+            "message": message_text,
+            "wa_url": wa_url
         }
         return {"action": "whatsapp_send", "data": wa_data}, {"result": "ok", "whatsapp": wa_data}
 
