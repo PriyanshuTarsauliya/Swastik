@@ -120,8 +120,10 @@ function stopCallTimer() {
 // High-Tech Procedural Canvas Engine: Plasma Orbs & Neural Synapses
 // ------------------------------------------------------------------
 let width, height;
-let leftOrb = { x: 0, y: 0, baseRadius: 82, radius: 82, rot: 0, shockwaves: [] };
-let rightOrb = { x: 0, y: 0, baseRadius: 86, radius: 86, rot: 0, shockwaves: [] };
+let isMobile = false;
+let isTablet = false;
+let leftOrb = { x: 0, y: 0, baseRadius: 80, radius: 80, rot: 0, shockwaves: [] };
+let rightOrb = { x: 0, y: 0, baseRadius: 84, radius: 84, rot: 0, shockwaves: [] };
 let spaceParticles = [];
 let streamPhotons = [];
 
@@ -142,15 +144,36 @@ function resize() {
   canvas.style.height = height + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  leftOrb.x = width * 0.28;
-  leftOrb.y = height * 0.48;
-  rightOrb.x = width * 0.72;
-  rightOrb.y = height * 0.48;
+  isMobile = width <= 600;
+  isTablet = width > 600 && width <= 1024;
+
+  if (isMobile) {
+    leftOrb.baseRadius = Math.max(36, Math.min(48, width * 0.11));
+    rightOrb.baseRadius = Math.max(40, Math.min(52, width * 0.12));
+    leftOrb.x = width * 0.5;
+    leftOrb.y = height * 0.22;
+    rightOrb.x = width * 0.5;
+    rightOrb.y = height * 0.44;
+  } else if (isTablet) {
+    leftOrb.baseRadius = Math.max(55, Math.min(70, width * 0.08));
+    rightOrb.baseRadius = Math.max(60, Math.min(75, width * 0.085));
+    leftOrb.x = width * 0.28;
+    leftOrb.y = height * 0.42;
+    rightOrb.x = width * 0.72;
+    rightOrb.y = height * 0.42;
+  } else {
+    leftOrb.baseRadius = 80;
+    rightOrb.baseRadius = 84;
+    leftOrb.x = width * 0.28;
+    leftOrb.y = height * 0.46;
+    rightOrb.x = width * 0.72;
+    rightOrb.y = height * 0.46;
+  }
 
   const badgeContainer = $("stageBadgeContainer");
   if (badgeContainer) {
     badgeContainer.style.left = `${leftOrb.x}px`;
-    badgeContainer.style.top = `${leftOrb.y - leftOrb.baseRadius - 45}px`;
+    badgeContainer.style.top = `${leftOrb.y - leftOrb.baseRadius - (isMobile ? 32 : 45)}px`;
   }
 }
 window.addEventListener("resize", resize);
@@ -230,11 +253,21 @@ function generateLightningPath(x1, y1, x2, y2, segments) {
 }
 
 function spawnLightning() {
-  const sx = leftOrb.x + leftOrb.baseRadius;
-  const ex = rightOrb.x - rightOrb.baseRadius;
+  let sx, sy, ex, ey;
+  if (isMobile) {
+    sx = leftOrb.x;
+    sy = leftOrb.y + leftOrb.baseRadius;
+    ex = rightOrb.x;
+    ey = rightOrb.y - rightOrb.baseRadius;
+  } else {
+    sx = leftOrb.x + leftOrb.baseRadius;
+    sy = leftOrb.y;
+    ex = rightOrb.x - rightOrb.baseRadius;
+    ey = rightOrb.y;
+  }
   const segments = 12 + Math.floor(Math.random() * 6);
   lightningArcs.push({
-    points: generateLightningPath(sx, leftOrb.y, ex, rightOrb.y, segments),
+    points: generateLightningPath(sx, sy, ex, ey, segments),
     alpha: 0.8,
     width: Math.random() * 1.5 + 0.5,
   });
@@ -439,8 +472,10 @@ function animate(time) {
     }
   }
 
-  // 1. Ambient Floating Stardust
-  spaceParticles.forEach((p) => {
+  // 1. Ambient Floating Stardust (optimized on mobile)
+  const activeParticleLimit = isMobile ? 24 : spaceParticles.length;
+  for (let i = 0; i < activeParticleLimit; i++) {
+    const p = spaceParticles[i];
     p.x += p.vx;
     p.y += p.vy;
     if (p.x < 0) p.x = width;
@@ -452,21 +487,41 @@ function animate(time) {
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
     ctx.fill();
-  });
+  }
 
   // Calculate dynamic pulses
   const userPulse = Math.min(1.2, userRMS * 8);
   const agentPulse = speaking ? 0.35 + Math.sin(time * 0.007) * 0.2 : 0;
 
-  // Organic Floating Motion — subtle sinusoidal drift
+  // Responsive Organic Floating Motion — subtle sinusoidal drift
   const driftX = Math.sin(time * 0.0008) * 4;
   const driftY = Math.cos(time * 0.0012) * 3;
-  leftOrb.x = width * 0.28 + driftX;
-  leftOrb.y = height * 0.48 + driftY;
-  rightOrb.x = width * 0.72 - driftX * 0.7;
-  rightOrb.y = height * 0.48 - driftY * 0.6;
 
-  // 2. Straight Horizontal Axis Line between Orbs
+  if (isMobile) {
+    leftOrb.x = width * 0.5 + Math.sin(time * 0.001) * 2;
+    leftOrb.y = height * 0.22 + driftY;
+    rightOrb.x = width * 0.5 - Math.sin(time * 0.001) * 2;
+    rightOrb.y = height * 0.44 - driftY * 0.7;
+  } else if (isTablet) {
+    leftOrb.x = width * 0.28 + driftX;
+    leftOrb.y = height * 0.42 + driftY;
+    rightOrb.x = width * 0.72 - driftX * 0.7;
+    rightOrb.y = height * 0.42 - driftY * 0.6;
+  } else {
+    leftOrb.x = width * 0.28 + driftX;
+    leftOrb.y = height * 0.46 + driftY;
+    rightOrb.x = width * 0.72 - driftX * 0.7;
+    rightOrb.y = height * 0.46 - driftY * 0.6;
+  }
+
+  // Dynamic tracking for Stage Status Badge
+  const badgeContainer = $("stageBadgeContainer");
+  if (badgeContainer) {
+    badgeContainer.style.left = `${leftOrb.x}px`;
+    badgeContainer.style.top = `${leftOrb.y - leftOrb.baseRadius - (isMobile ? 32 : 45)}px`;
+  }
+
+  // 2. Axis Line between Orbs (vertical on mobile, horizontal on tablet/desktop)
   ctx.save();
   ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
   ctx.lineWidth = 1;
@@ -477,16 +532,26 @@ function animate(time) {
   ctx.stroke();
   ctx.restore();
 
-  // 3. Discrete Horizontal Data Dot Chain
+  // 3. Discrete Data Dot Chain (vertical on mobile, horizontal on tablet/desktop)
   const isCommunicating = userPulse > 0.02 || speaking;
-  streamPhotons.forEach((pt) => {
+  const activePhotonLimit = isMobile ? 20 : streamPhotons.length;
+  for (let i = 0; i < activePhotonLimit; i++) {
+    const pt = streamPhotons[i];
     pt.progress += pt.speed * (isCommunicating ? 2.6 : 1.0);
     if (pt.progress > 1) pt.progress = 0;
 
-    const startX = leftOrb.x + leftOrb.baseRadius;
-    const endX = rightOrb.x - rightOrb.baseRadius;
-    const px = startX + (endX - startX) * pt.progress;
-    const py = leftOrb.y;
+    let px, py;
+    if (isMobile) {
+      const startY = leftOrb.y + leftOrb.baseRadius;
+      const endY = rightOrb.y - rightOrb.baseRadius;
+      px = leftOrb.x;
+      py = startY + (endY - startY) * pt.progress;
+    } else {
+      const startX = leftOrb.x + leftOrb.baseRadius;
+      const endX = rightOrb.x - rightOrb.baseRadius;
+      px = startX + (endX - startX) * pt.progress;
+      py = leftOrb.y;
+    }
 
     const isNearAgent = pt.progress > 0.5;
     const dotColor = isNearAgent ? `rgba(180, 255, 245, ${pt.alpha})` : `rgba(255, 230, 160, ${pt.alpha})`;
@@ -495,7 +560,7 @@ function animate(time) {
     ctx.beginPath();
     ctx.arc(px, py, pt.size, 0, Math.PI * 2);
     ctx.fill();
-  });
+  }
 
   // 4. Lightning Arcs (spawn during active communication)
   if (isCommunicating && time - lastLightningTime > 300 + Math.random() * 700) {

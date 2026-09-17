@@ -29,6 +29,7 @@
   body {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     background-color: var(--bg-dark);
     background: radial-gradient(ellipse at 50% 50%, #08101A 0%, #03060A 100%);
@@ -66,12 +67,14 @@
     left: 0;
     width: 100%;
     height: 100%;
+    height: 100dvh;
     z-index: 3;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 32px 48px;
+    padding: 24px 36px;
     pointer-events: none;
+    overflow: hidden;
   }
 
   /* Futuristic Corner Tech Brackets */
@@ -91,13 +94,23 @@
   .hud-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
+    background: rgba(8, 14, 23, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 10px 20px;
+    width: 100%;
+    pointer-events: auto;
+    z-index: 10;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   }
 
   .status-block {
     display: flex;
-    flex-direction: column;
-    gap: 6px;
+    align-items: center;
+    gap: 12px;
   }
 
   .conn-status {
@@ -105,7 +118,7 @@
     align-items: center;
     gap: 8px;
     font-size: 11px;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.2em;
     font-weight: 700;
     color: #E2E8F0;
     text-transform: uppercase;
@@ -128,36 +141,38 @@
 
   .lang-tag {
     font-size: 9px;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.16em;
     color: var(--text-muted);
     text-transform: uppercase;
     font-family: 'JetBrains Mono', monospace;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-left: 12px;
   }
 
   .hud-brand-container {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
   }
 
   .telemetry-pill {
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
     padding: 4px 12px;
     border-radius: 999px;
     font-size: 9px;
     letter-spacing: 0.15em;
     font-family: 'JetBrains Mono', monospace;
-    color: #64748B;
+    color: #94A3B8;
     text-transform: uppercase;
   }
 
   .hud-brand {
-    font-size: 12px;
-    letter-spacing: 0.25em;
-    color: #94A3B8;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: #CBD5E1;
     text-transform: uppercase;
-    font-weight: 600;
+    font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
   }
 
@@ -251,30 +266,55 @@
   /* Right Side Sliding HUD Cards */
   .cards-overlay {
     position: absolute;
-    right: 13%;
-    top: 36%;
+    right: 36px;
+    top: 50%;
     transform: translateY(-50%);
-    width: 330px;
+    width: 340px;
+    max-height: calc(100dvh - 180px);
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    pointer-events: auto;
-    z-index: 10;
+    gap: 14px;
+    pointer-events: none;
+    z-index: 15;
+    padding: 6px;
+  }
+
+  .cards-overlay::-webkit-scrollbar {
+    width: 5px;
+  }
+  .cards-overlay::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 999px;
+  }
+  .cards-overlay::-webkit-scrollbar-thumb {
+    background: rgba(20, 200, 178, 0.3);
+    border-radius: 999px;
+  }
+  .cards-overlay::-webkit-scrollbar-thumb:hover {
+    background: rgba(20, 200, 178, 0.6);
   }
 
   .hud-card {
     background: var(--card-bg);
     border: 1px solid var(--border-glass);
     border-radius: 14px;
-    padding: 18px 22px;
+    padding: 16px 20px;
     backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     opacity: 0;
     transform: translateX(40px);
-    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
     pointer-events: auto;
     position: relative;
     overflow: hidden;
+  }
+
+  .hud-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 
   /* Subtle scanning shimmer line on cards */
@@ -363,13 +403,25 @@
     border-radius: 8px;
     font-size: 11px;
     font-family: 'JetBrains Mono', monospace;
-    transition: all 0.3s ease;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .slot-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateX(3px);
   }
 
   .slot-row.booked {
     background: rgba(20, 200, 178, 0.14);
     border-color: rgba(20, 200, 178, 0.45);
     box-shadow: 0 0 15px rgba(20, 200, 178, 0.25);
+  }
+
+  .slot-row.booked:hover {
+    background: rgba(20, 200, 178, 0.2);
+    border-color: rgba(20, 200, 178, 0.6);
+    transform: translateX(3px);
   }
 
   .badge-free {
@@ -658,7 +710,18 @@
     flex-direction: column;
     gap: 6px;
     pointer-events: auto;
-    margin-bottom: 24px;
+    background: rgba(5, 10, 18, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px 18px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .subtitles-container:hover {
+    border-color: rgba(255, 255, 255, 0.14);
   }
 
   .speaker-header {
@@ -694,13 +757,13 @@
   }
 
   .sub-main {
-    font-size: 17px;
+    font-size: 15px;
     font-family: 'Noto Sans Devanagari', 'Plus Jakarta Sans', sans-serif;
     font-weight: 500;
     color: #F8FAFC;
-    line-height: 1.6;
-    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8);
-    min-height: 32px;
+    line-height: 1.55;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+    min-height: 24px;
   }
   
   .fade-in {
@@ -708,15 +771,15 @@
   }
 
   @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
   .sub-translation {
-    font-size: 12px;
-    color: #64748B;
+    font-size: 11.5px;
+    color: #94A3B8;
     font-style: italic;
-    min-height: 18px;
+    min-height: 16px;
   }
 
   /* Bottom Controls Floating Bar */
@@ -724,14 +787,23 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
+    gap: 20px;
+    width: 100%;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .call-btn-container {
+    pointer-events: auto;
+    flex-shrink: 0;
   }
 
   .call-btn {
     pointer-events: auto;
-    background: rgba(20, 200, 178, 0.1);
-    border: 1px solid rgba(20, 200, 178, 0.35);
+    background: rgba(20, 200, 178, 0.12);
+    border: 1px solid rgba(20, 200, 178, 0.4);
     color: #14C8B2;
-    padding: 12px 28px;
+    padding: 13px 28px;
     border-radius: 999px;
     font-size: 11px;
     font-weight: 800;
@@ -739,25 +811,40 @@
     text-transform: uppercase;
     cursor: pointer;
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     align-items: center;
     gap: 10px;
-    box-shadow: 0 4px 25px rgba(20, 200, 178, 0.2);
+    box-shadow: 0 4px 25px rgba(20, 200, 178, 0.25);
     font-family: 'JetBrains Mono', monospace;
+    position: relative;
+    animation: cta-pulse 3s infinite ease-in-out;
+  }
+
+  @keyframes cta-pulse {
+    0%, 100% {
+      box-shadow: 0 4px 20px rgba(20, 200, 178, 0.25), inset 0 0 10px rgba(20, 200, 178, 0.1);
+      border-color: rgba(20, 200, 178, 0.35);
+    }
+    50% {
+      box-shadow: 0 4px 35px rgba(20, 200, 178, 0.55), inset 0 0 18px rgba(20, 200, 178, 0.25);
+      border-color: rgba(20, 200, 178, 0.7);
+    }
   }
 
   .call-btn:hover {
-    background: rgba(20, 200, 178, 0.22);
-    box-shadow: 0 6px 32px rgba(20, 200, 178, 0.4);
-    transform: translateY(-2px);
+    background: rgba(20, 200, 178, 0.25);
+    box-shadow: 0 6px 36px rgba(20, 200, 178, 0.6);
+    transform: translateY(-2px) scale(1.02);
   }
 
   .call-btn.in-call {
-    background: rgba(239, 68, 68, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.45);
+    animation: none;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.55);
     color: #EF4444;
-    box-shadow: 0 4px 25px rgba(239, 68, 68, 0.25);
+    box-shadow: 0 4px 25px rgba(239, 68, 68, 0.35);
     position: relative;
     overflow: hidden;
   }
@@ -775,17 +862,134 @@
     100% { transform: rotate(1turn); }
   }
 
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .hud-layer { padding: 16px 20px; }
-    .hud-brand-container { display: none; }
-    .cards-overlay {
-      position: relative; right: auto; top: auto; transform: none; width: 100%; margin-top: 100px;
+  /* Tablet Breakpoint (769px - 1024px) */
+  @media (max-width: 1024px) {
+    .hud-layer {
+      padding: 18px 24px;
     }
-    .orb-labels-container { top: 55%; }
-    .stage-badge-container { left: 50% !important; top: 15% !important; transform: translateX(-50%); }
-    .bottom-bar { flex-direction: column; align-items: center; gap: 16px; margin-top: auto; }
-    .subtitles-container { max-width: 100%; text-align: center; align-items: center; }
+    .hud-brand {
+      font-size: 10px;
+      letter-spacing: 0.16em;
+    }
+    .cards-overlay {
+      right: 20px;
+      width: 290px;
+      max-height: calc(100dvh - 200px);
+    }
+    .subtitles-container {
+      max-width: 540px;
+    }
+    .orb-labels-container {
+      top: 64%;
+    }
+  }
+
+  /* Mobile Breakpoint (<= 768px) */
+  @media (max-width: 768px) {
+    .hud-layer {
+      padding: 12px 14px 16px;
+    }
+    .corner-bracket {
+      display: none;
+    }
+    .hud-header {
+      padding: 8px 12px;
+      border-radius: 10px;
+    }
+    .lang-tag,
+    .desktop-telemetry {
+      display: none;
+    }
+    .hud-brand {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+    }
+    .telemetry-pill {
+      padding: 3px 8px;
+      font-size: 8.5px;
+    }
+
+    .orb-labels-container {
+      display: none;
+    }
+
+    /* Cards overlay on mobile: float cleanly in viewport, scrollable, above orbs */
+    .cards-overlay {
+      position: absolute;
+      top: 60px;
+      left: 12px;
+      right: 12px;
+      bottom: auto;
+      width: auto;
+      max-height: calc(100dvh - 230px);
+      transform: none;
+      padding: 4px;
+      gap: 12px;
+    }
+    .hud-card {
+      padding: 14px 16px;
+      width: 100%;
+      max-width: 380px;
+      margin: 0 auto;
+    }
+
+    /* Fixed Bottom Action Section */
+    .bottom-bar {
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+    .subtitles-container {
+      max-width: 100%;
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      gap: 4px;
+    }
+    .sub-main {
+      font-size: 13.5px;
+      line-height: 1.45;
+      min-height: 22px;
+    }
+    .sub-translation {
+      font-size: 11px;
+      min-height: 14px;
+    }
+    .call-btn-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .call-btn {
+      width: 100%;
+      max-width: 340px;
+      justify-content: center;
+      padding: 14px 20px;
+      font-size: 12px;
+      border-radius: 999px;
+    }
+  }
+
+  /* Short Screen Height Support (landscape phones, small screens) */
+  @media (max-height: 640px) {
+    .hud-layer {
+      padding: 8px 12px 10px;
+    }
+    .subtitles-container {
+      padding: 8px 12px;
+    }
+    .sub-main {
+      font-size: 12px;
+      line-height: 1.35;
+      min-height: 18px;
+    }
+    .cards-overlay {
+      max-height: calc(100dvh - 160px);
+    }
+    .call-btn {
+      padding: 10px 20px;
+    }
   }
 </style>
 </head>
@@ -817,7 +1021,7 @@
       </div>
       <div class="hud-brand-container">
         <span id="liveClock" class="telemetry-pill">00:00:00</span>
-        <span class="telemetry-pill">VOICE: 24kHz PCM</span>
+        <span class="telemetry-pill desktop-telemetry">VOICE: 24kHz PCM</span>
         <span class="hud-brand">DR. GUNJA GUPTA · SWASTIK AI</span>
       </div>
     </header>
@@ -967,7 +1171,7 @@
         <div id="subTrans" class="sub-translation">Hello, thank you for calling Dr. Gunja Gupta Homeopathy Consultant...</div>
       </div>
 
-      <div>
+      <div class="call-btn-container">
         <button id="callBtn" class="call-btn">
           <span id="callBtnIcon">🎙</span>
           <span id="callBtnText">Start Call</span>
