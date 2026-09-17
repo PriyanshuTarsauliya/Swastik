@@ -5,3 +5,6 @@ __pycache__/
 node_modules/
 .next/
 .DS_Store
+/inspira-ui/
+/lenis/
+/icons/

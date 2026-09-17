@@ -4,6 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Dr. Gunja Gupta · AI Voice Receptionist</title>
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -59,6 +61,10 @@
     width: 100%;
     height: 100%;
     z-index: 1;
+    cursor: grab;
+  }
+  #orbCanvas:active {
+    cursor: grabbing;
   }
 
   /* Main HUD Interface Layer */
@@ -93,6 +99,61 @@
   .cb-bl { bottom: 20px; left: 24px; border-right: 0; border-top: 0; }
   .cb-br { bottom: 20px; right: 24px; border-left: 0; border-top: 0; }
 
+  /* Clinic Avatar Badge in Header */
+  .clinic-avatar-badge {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    overflow: visible;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 0 14px rgba(20, 200, 178, 0.45);
+  }
+  .clinic-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid rgba(20, 200, 178, 0.8);
+  }
+  .clinic-status-ring {
+    position: absolute;
+    bottom: -1px;
+    right: -1px;
+    width: 8px;
+    height: 8px;
+    background: #10B981;
+    border-radius: 50%;
+    border: 1.5px solid #04070C;
+    box-shadow: 0 0 6px #10B981;
+  }
+
+  /* Interactive 3D Drag Hint Pill */
+  .drag-hint-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    font-family: 'JetBrains Mono', monospace;
+    color: #64748B;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    padding: 4px 10px;
+    text-transform: uppercase;
+    user-select: none;
+    pointer-events: none;
+    transition: opacity 0.4s ease, border-color 0.3s ease;
+  }
+  .drag-hint-pill:hover {
+    color: #14C8B2;
+    border-color: rgba(20, 200, 178, 0.4);
+  }
+
   /* Header */
   .hud-header {
     display: flex;
@@ -108,6 +169,8 @@
     pointer-events: auto;
     z-index: 10;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    transform-style: preserve-3d;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
   }
 
   .status-block {
@@ -282,6 +345,8 @@
     pointer-events: none;
     z-index: 15;
     padding: 6px;
+    perspective: 1200px;
+    transform-style: preserve-3d;
   }
 
   .cards-overlay::-webkit-scrollbar {
@@ -301,6 +366,7 @@
 
   .hud-card {
     background: var(--card-bg);
+    background-image: radial-gradient(circle 280px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.07), transparent 75%);
     border: 1px solid var(--border-glass);
     border-radius: 14px;
     padding: 16px 20px;
@@ -308,16 +374,45 @@
     -webkit-backdrop-filter: blur(24px);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     opacity: 0;
-    transform: translateX(40px);
-    transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateX(40px) perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px);
+    transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.12s cubic-bezier(0.2, 0, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease;
     pointer-events: auto;
     position: relative;
     overflow: hidden;
+    transform-style: preserve-3d;
+    will-change: transform;
   }
 
   .hud-card:hover {
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    border-color: rgba(20, 200, 178, 0.35);
+    box-shadow: 0 28px 65px rgba(0, 0, 0, 0.85), 0 0 20px rgba(20, 200, 178, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
+  /* 3D Depth Layers inside Cards (Inspira CardItem) */
+  .card-depth-1 {
+    transform: translateZ(12px);
+    transform-style: preserve-3d;
+    transition: transform 0.2s ease-out;
+  }
+
+  .card-depth-2 {
+    transform: translateZ(24px);
+    transform-style: preserve-3d;
+    transition: transform 0.2s ease-out;
+  }
+
+  /* Inspira UI Border Beam */
+  .border-beam {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    border: 1px solid transparent;
+    background: conic-gradient(from var(--beam-angle, 0deg) at 50% 50%, transparent 65%, rgba(20, 200, 178, 0.6) 88%, transparent 100%) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.85;
   }
 
   /* Subtle scanning shimmer line on cards */
@@ -328,7 +423,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(180deg, transparent, rgba(20, 200, 178, 0.06), transparent);
+    background: linear-gradient(180deg, transparent, rgba(20, 200, 178, 0.05), transparent);
     animation: scan-card 4s infinite linear;
     pointer-events: none;
   }
@@ -340,7 +435,7 @@
 
   .hud-card.visible {
     opacity: 1;
-    transform: translateX(0);
+    transform: translateX(0) perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px);
   }
 
   /* Google Calendar Card */
@@ -1015,6 +1110,10 @@
     <!-- Top Header -->
     <header class="hud-header">
       <div class="status-block">
+        <div class="clinic-avatar-badge">
+          <img src="/icons/icon-192.png" alt="Dr. Gunja Gupta Clinic" class="clinic-avatar-img">
+          <span class="clinic-status-ring"></span>
+        </div>
         <div class="conn-status">
           <div id="statusDot" class="square-dot"></div>
           <span id="connLabel">CONNECTED</span>
@@ -1023,6 +1122,10 @@
         <div class="lang-tag">HINDI + ENGLISH // MULTIMODAL V3.1</div>
       </div>
       <div class="hud-brand-container">
+        <span id="dragHint" class="drag-hint-pill desktop-telemetry">
+          <svg style="width:11px;height:11px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20M7 7l10 10M17 7 7 17"/></svg>
+          DRAG 3D SPHERES
+        </span>
         <span id="liveClock" class="telemetry-pill">00:00:00</span>
         <span class="telemetry-pill desktop-telemetry">VOICE: 24kHz PCM</span>
         <span class="hud-brand">DR. GUNJA GUPTA · SWASTIK AI</span>
@@ -1051,22 +1154,25 @@
     <div class="cards-overlay">
       <!-- Google Calendar Card -->
       <div id="calendarCard" class="hud-card">
-        <div class="gcal-header">
-          <div class="gcal-brand">
-            <svg class="gcal-icon" viewBox="0 0 24 24" fill="none">
-              <rect x="3" y="4" width="18" height="18" rx="2" stroke="#4285F4" stroke-width="2"/>
-              <line x1="16" y1="2" x2="16" y2="6" stroke="#EA4335" stroke-width="2"/>
-              <line x1="8" y1="2" x2="8" y2="6" stroke="#34A853" stroke-width="2"/>
-              <line x1="3" y1="10" x2="21" y2="10" stroke="#FBBC05" stroke-width="2"/>
-            </svg>
-            Google Calendar
+        <div class="border-beam"></div>
+        <div class="card-depth-1">
+          <div class="gcal-header">
+            <div class="gcal-brand">
+              <svg class="gcal-icon" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="4" width="18" height="18" rx="2" stroke="#4285F4" stroke-width="2"/>
+                <line x1="16" y1="2" x2="16" y2="6" stroke="#EA4335" stroke-width="2"/>
+                <line x1="8" y1="2" x2="8" y2="6" stroke="#34A853" stroke-width="2"/>
+                <line x1="3" y1="10" x2="21" y2="10" stroke="#FBBC05" stroke-width="2"/>
+              </svg>
+              Google Calendar
+            </div>
+            <span class="gcal-tag">Tomorrow</span>
           </div>
-          <span class="gcal-tag">Tomorrow</span>
+          <div class="doc-name">Dr. Gunja Gupta</div>
+          <div class="doc-role">HOMEOPATHY CONSULTANT</div>
         </div>
-        <div class="doc-name">Dr. Gunja Gupta</div>
-        <div class="doc-role">HOMEOPATHY CONSULTANT</div>
 
-        <div id="slotsContainer" class="slots-group">
+        <div id="slotsContainer" class="slots-group card-depth-2">
           <div class="slot-row" id="slot-1100">
             <span>11:00 Consultation</span>
             <span class="badge-free">FREE</span>
@@ -1093,44 +1199,52 @@
 
       <!-- WhatsApp Confirmation Card -->
       <div id="waCard" class="hud-card">
-        <div class="wa-top">
-          <div class="wa-title">
-            <span>● WhatsApp</span>
+        <div class="border-beam"></div>
+        <div class="card-depth-1">
+          <div class="wa-top">
+            <div class="wa-title">
+              <span>● WhatsApp</span>
+            </div>
+            <span class="wa-time">now</span>
           </div>
-          <span class="wa-time">now</span>
+          <div class="wa-sender">SWASTIK HEALTHCARE</div>
+          <div id="waText" class="wa-msg">
+            Ramana — your appointment with Dr. Gunja Gupta is confirmed for tomorrow at 11:00 AM. Consultation fee ₹499.
+          </div>
         </div>
-        <div class="wa-sender">SWASTIK HEALTHCARE</div>
-        <div id="waText" class="wa-msg">
-          Ramana — your appointment with Dr. Gunja Gupta is confirmed for tomorrow at 11:00 AM. Consultation fee ₹499.
+        <div class="card-depth-2">
+          <a id="waFormLink" href="#" target="_blank" class="wa-btn-link">
+            Open Consultation Form & Upload Receipt →
+          </a>
+          <a id="waSendBtn" href="#" target="_blank" class="wa-btn-send">
+            <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+            Send WhatsApp Now
+          </a>
         </div>
-        <a id="waFormLink" href="#" target="_blank" class="wa-btn-link">
-          Open Consultation Form & Upload Receipt →
-        </a>
-        <a id="waSendBtn" href="#" target="_blank" class="wa-btn-send">
-          <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
-          Send WhatsApp Now
-        </a>
       </div>
 
       <!-- UPI Payment Card -->
       <div id="upiCard" class="hud-card">
-        <div class="upi-header">
-          <div class="upi-title">
-            <span class="upi-icon">₹</span>
-            <span>UPI Payment</span>
+        <div class="border-beam"></div>
+        <div class="card-depth-1">
+          <div class="upi-header">
+            <div class="upi-title">
+              <span class="upi-icon">₹</span>
+              <span>UPI Payment</span>
+            </div>
+            <span id="upiAmount" class="upi-amount">₹499</span>
           </div>
-          <span id="upiAmount" class="upi-amount">₹499</span>
+          <div id="upiPayeeName" class="upi-payee">Dr Gunja Gupta</div>
+          <div id="upiId" class="upi-id-label">UPI: 6387831138-2@ibl</div>
         </div>
-        <div id="upiPayeeName" class="upi-payee">Dr Gunja Gupta</div>
-        <div id="upiId" class="upi-id-label">UPI: 6387831138-2@ibl</div>
 
         <!-- QR Code -->
-        <div class="upi-qr-container">
+        <div class="upi-qr-container card-depth-2">
           <img id="upiQrImg" class="upi-qr-img" src="" alt="UPI QR Code" />
         </div>
 
         <!-- Pay Button (deep link for mobile) -->
-        <a id="upiPayBtn" href="#" class="upi-pay-btn">
+        <a id="upiPayBtn" href="#" class="upi-pay-btn card-depth-2">
           <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
           Pay ₹499 via UPI App
         </a>

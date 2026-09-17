@@ -221,6 +221,7 @@ const sphereVertexShader = `
 const patientFragmentShader = `
   uniform float uTime;
   uniform float uPulse;
+  uniform vec2 uMouse;
   varying vec3 vNormal;
   varying vec3 vViewPosition;
   varying vec3 vWorldPosition;
@@ -228,47 +229,85 @@ const patientFragmentShader = `
   void main() {
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
-    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
 
-    float shimmer = sin(vWorldPosition.x * 2.5 + uTime * 2.2) * 
-                    cos(vWorldPosition.y * 2.5 + uTime * 1.8) * 
-                    sin(vWorldPosition.z * 2.5 + uTime * 1.4) * 0.035;
+    // Dynamic Moving Key Light: Gentle orbital dance + interactive cursor responsiveness
+    vec3 lightDir = normalize(vec3(
+      -0.42 + sin(uTime * 1.35) * 0.16 + uMouse.x * 0.28,
+       0.46 + cos(uTime * 1.10) * 0.14 - uMouse.y * 0.28,
+       0.82 + sin(uTime * 0.85) * 0.10
+    ));
 
-    float centerFactor = pow(ndv, 1.4 + uPulse * 0.45) + shimmer;
-    centerFactor = clamp(centerFactor, 0.0, 1.0);
+    // Smooth wrapped diffuse lighting (Key light with orbital drift)
+    float nDotL = dot(normal, lightDir);
+    float diff = clamp((nDotL + 0.50) / 1.50, 0.0, 1.0);
 
-    vec3 cWhite = vec3(1.0, 1.0, 1.0);
-    vec3 cSun   = vec3(0.996, 0.941, 0.541); // #FEF08A
-    vec3 cAmber = vec3(0.961, 0.620, 0.043); // #F59E0B
-    vec3 cWarm  = vec3(0.851, 0.467, 0.024); // #D97706
-    vec3 cDark  = vec3(0.573, 0.251, 0.035); // #92400E
+    // Dynamic Multi-Octave Fluid Light Waves (Living Liquid Motion on Surface)
+    float wave1 = sin(normal.x * 4.0 + normal.y * 3.2 + uTime * 1.6);
+    float wave2 = cos(normal.y * 4.5 - normal.z * 3.0 + uTime * 1.2);
+    float wave3 = sin((normal.x + normal.z) * 5.5 - uTime * 2.0);
+    float fluidLight = (wave1 * 0.5 + wave2 * 0.35 + wave3 * 0.15) * 0.038;
+    diff = clamp(diff + fluidLight, 0.0, 1.0);
+
+    // Rich Velvet Champagne / Golden Sand Palette (Matching voice agent.mp4)
+    vec3 cHighlight = vec3(1.0, 0.98, 0.92); // Pure luminous warm white
+    vec3 cSun       = vec3(0.97, 0.86, 0.62); // Radiant champagne gold
+    vec3 cAmber     = vec3(0.88, 0.72, 0.42); // Warm rich amber-sand midtone
+    vec3 cDark      = vec3(0.66, 0.48, 0.24); // Warm ochre shadow
+    vec3 cShadow    = vec3(0.42, 0.28, 0.12); // Deep velvety warm ambient shadow
 
     vec3 col;
-    float coreSpread = 0.54 + uPulse * 0.26;
-    if (centerFactor > coreSpread) {
-      float t = (centerFactor - coreSpread) / (1.0 - coreSpread + 0.001);
-      col = mix(cSun, cWhite, t);
-    } else if (centerFactor > 0.35) {
-      float t = (centerFactor - 0.35) / (coreSpread - 0.35 + 0.001);
+    if (diff > 0.70) {
+      float t = (diff - 0.70) / 0.30;
+      col = mix(cSun, cHighlight, t);
+    } else if (diff > 0.40) {
+      float t = (diff - 0.40) / 0.30;
       col = mix(cAmber, cSun, t);
-    } else if (centerFactor > 0.12) {
-      float t = (centerFactor - 0.12) / (0.35 - 0.12);
-      col = mix(cWarm, cAmber, t);
+    } else if (diff > 0.15) {
+      float t = (diff - 0.15) / 0.25;
+      col = mix(cDark, cAmber, t);
     } else {
-      float t = centerFactor / 0.12;
-      col = mix(cDark, cWarm, t);
+      float t = diff / 0.15;
+      col = mix(cShadow, cDark, t);
     }
 
-    float fresnel = pow(1.0 - ndv, 2.4);
-    col += vec3(1.0, 0.95, 0.8) * fresnel * (0.85 + uPulse * 0.4);
+    // Secondary subtle fill light from bottom-right for spherical 3D depth
+    vec3 fillDir = normalize(vec3(0.50, -0.40, 0.60));
+    float fillDiff = clamp((dot(normal, fillDir) + 0.3) / 1.3, 0.0, 1.0) * 0.18;
+    col += cAmber * fillDiff;
 
-    gl_FragColor = vec4(col, 0.98);
+    // Moving Luminous Inner Core (Focused glowing nucleus from voice agent.mp4)
+    vec3 corePos = normalize(vec3(
+      -0.16 + sin(uTime * 1.1) * 0.10 + uMouse.x * 0.18,
+       0.16 + cos(uTime * 0.9) * 0.08 - uMouse.y * 0.18,
+       0.96
+    ));
+    float coreDist = length(normal - corePos);
+    // Tighter, focused radial nucleus falloff (peaks in center, fades smoothly)
+    float coreGlow = smoothstep(0.85, 0.0, coreDist);
+    // Subtle breathing light caustics inside the core
+    float coreRipple = sin(coreDist * 18.0 - uTime * 3.8) * 0.5 + 0.5;
+    float coreIntensity = pow(coreGlow, 2.2) * (0.52 + coreRipple * 0.18 + uPulse * 0.45);
+    col = mix(col, cHighlight, clamp(coreIntensity, 0.0, 0.92));
+
+    // Silky specular highlight with moving light
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float nDotH = clamp(dot(normal, halfDir), 0.0, 1.0);
+    float spec = pow(nDotH, 18.0 + (1.0 - uPulse) * 8.0);
+    col += cHighlight * spec * (0.45 + uPulse * 0.40);
+
+    // Fresnel rim sheen (delicate edge glow)
+    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+    float rim = pow(1.0 - ndv, 3.0);
+    col += vec3(0.98, 0.88, 0.65) * rim * (0.20 + uPulse * 0.20);
+
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 
 const swastikFragmentShader = `
   uniform float uTime;
   uniform float uPulse;
+  uniform vec2 uMouse;
   varying vec3 vNormal;
   varying vec3 vViewPosition;
   varying vec3 vWorldPosition;
@@ -276,209 +315,180 @@ const swastikFragmentShader = `
   void main() {
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
-    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
 
-    float shimmer = sin(vWorldPosition.x * 2.8 + uTime * 2.5) * 
-                    cos(vWorldPosition.y * 2.8 + uTime * 2.0) * 
-                    sin(vWorldPosition.z * 2.8 + uTime * 1.6) * 0.035;
+    // Dynamic Moving Key Light: Gentle orbital dance + interactive cursor responsiveness
+    vec3 lightDir = normalize(vec3(
+      -0.42 + sin(uTime * 1.35 + 1.57) * 0.16 + uMouse.x * 0.28,
+       0.46 + cos(uTime * 1.10 + 1.57) * 0.14 - uMouse.y * 0.28,
+       0.82 + cos(uTime * 0.85) * 0.10
+    ));
 
-    float centerFactor = pow(ndv, 1.4 + uPulse * 0.45) + shimmer;
-    centerFactor = clamp(centerFactor, 0.0, 1.0);
+    // Smooth wrapped diffuse lighting (Key light with orbital drift)
+    float nDotL = dot(normal, lightDir);
+    float diff = clamp((nDotL + 0.50) / 1.50, 0.0, 1.0);
 
-    vec3 cWhite   = vec3(1.0, 1.0, 1.0);
-    vec3 cNeon    = vec3(0.404, 0.910, 0.976); // #67E8F9
-    vec3 cTeal    = vec3(0.078, 0.722, 0.651); // #14B8A6
-    vec3 cDeep    = vec3(0.051, 0.580, 0.533); // #0D9488
-    vec3 cDark    = vec3(0.059, 0.463, 0.431); // #0F766E
+    // Dynamic Multi-Octave Fluid Light Waves
+    float wave1 = sin(normal.x * 4.0 + normal.y * 3.2 + uTime * 1.6 + 2.0);
+    float wave2 = cos(normal.y * 4.5 - normal.z * 3.0 + uTime * 1.2 + 1.0);
+    float wave3 = sin((normal.x + normal.z) * 5.5 - uTime * 2.0 + 0.5);
+    float fluidLight = (wave1 * 0.5 + wave2 * 0.35 + wave3 * 0.15) * 0.038;
+    diff = clamp(diff + fluidLight, 0.0, 1.0);
+
+    // Glowing Mint & Oceanic Teal Palette (Matching voice agent.mp4)
+    vec3 cHighlight = vec3(0.96, 1.0, 1.0);   // Pure luminous cyan-white
+    vec3 cAqua      = vec3(0.68, 0.96, 0.93); // Radiant pastel cyan
+    vec3 cTeal      = vec3(0.32, 0.82, 0.76); // Glowing turquoise midtone
+    vec3 cDark      = vec3(0.14, 0.58, 0.54); // Deep seafoam teal
+    vec3 cShadow    = vec3(0.06, 0.34, 0.32); // Deep oceanic ambient shadow
 
     vec3 col;
-    float coreSpread = 0.54 + uPulse * 0.26;
-    if (centerFactor > coreSpread) {
-      float t = (centerFactor - coreSpread) / (1.0 - coreSpread + 0.001);
-      col = mix(cNeon, cWhite, t);
-    } else if (centerFactor > 0.35) {
-      float t = (centerFactor - 0.35) / (coreSpread - 0.35 + 0.001);
-      col = mix(cTeal, cNeon, t);
-    } else if (centerFactor > 0.12) {
-      float t = (centerFactor - 0.12) / (0.35 - 0.12);
-      col = mix(cDeep, cTeal, t);
+    if (diff > 0.70) {
+      float t = (diff - 0.70) / 0.30;
+      col = mix(cAqua, cHighlight, t);
+    } else if (diff > 0.40) {
+      float t = (diff - 0.40) / 0.30;
+      col = mix(cTeal, cAqua, t);
+    } else if (diff > 0.15) {
+      float t = (diff - 0.15) / 0.25;
+      col = mix(cDark, cTeal, t);
     } else {
-      float t = centerFactor / 0.12;
-      col = mix(cDark, cDeep, t);
+      float t = diff / 0.15;
+      col = mix(cShadow, cDark, t);
     }
 
-    float fresnel = pow(1.0 - ndv, 2.4);
-    col += vec3(0.85, 1.0, 1.0) * fresnel * (0.9 + uPulse * 0.4);
+    // Secondary fill light from bottom-right
+    vec3 fillDir = normalize(vec3(0.50, -0.40, 0.60));
+    float fillDiff = clamp((dot(normal, fillDir) + 0.3) / 1.3, 0.0, 1.0) * 0.18;
+    col += cTeal * fillDiff;
 
-    gl_FragColor = vec4(col, 0.98);
+    // Moving Luminous Inner Core (Focused glowing nucleus)
+    vec3 corePos = normalize(vec3(
+      -0.16 + sin(uTime * 1.1 + 2.0) * 0.10 + uMouse.x * 0.18,
+       0.16 + cos(uTime * 0.9 + 2.0) * 0.08 - uMouse.y * 0.18,
+       0.96
+    ));
+    float coreDist = length(normal - corePos);
+    float coreGlow = smoothstep(0.85, 0.0, coreDist);
+    float coreRipple = sin(coreDist * 18.0 - uTime * 3.8) * 0.5 + 0.5;
+    float coreIntensity = pow(coreGlow, 2.2) * (0.52 + coreRipple * 0.18 + uPulse * 0.45);
+    col = mix(col, cHighlight, clamp(coreIntensity, 0.0, 0.92));
+
+    // Specular highlight with moving light
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float nDotH = clamp(dot(normal, halfDir), 0.0, 1.0);
+    float spec = pow(nDotH, 18.0 + (1.0 - uPulse) * 8.0);
+    col += cHighlight * spec * (0.45 + uPulse * 0.40);
+
+    // Fresnel rim sheen
+    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+    float rim = pow(1.0 - ndv, 3.0);
+    col += vec3(0.65, 0.98, 0.94) * rim * (0.20 + uPulse * 0.20);
+
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 
 // ------------------------------------------------------------------
-// 3D Gyroscopic Orb System Builder
+// Smooth 3D Sphere & Acoustic Ripple System (Exact Match to User Reference)
 // ------------------------------------------------------------------
 function createOrbSystem(isPatient) {
   const group = new THREE.Group();
-  const radius = isPatient ? 6.4 : 6.7;
-  const ringColor = isPatient ? 0xF5A623 : 0x14C8B2;
-  const glowColor = isPatient ? 0xFFF0A0 : 0x90FFF5;
+  const radius = isPatient ? 6.5 : 6.8;
+  const rippleColor = isPatient ? 0xF5A623 : 0x14C8B2;
   const dir = isPatient ? 1 : -1;
 
-  // 1. Radiant Light Core Sphere
-  const sphereGeo = new THREE.SphereGeometry(radius, 54, 54);
+  // 1. Silky Smooth 3D Illuminated Sphere with Dynamic Light Motion
+  const sphereGeo = new THREE.SphereGeometry(radius, 64, 64);
   const shaderMat = new THREE.ShaderMaterial({
     vertexShader: sphereVertexShader,
     fragmentShader: isPatient ? patientFragmentShader : swastikFragmentShader,
     uniforms: {
       uTime: { value: 0.0 },
       uPulse: { value: 0.0 },
+      uMouse: { value: new THREE.Vector2(0, 0) },
     },
-    transparent: true,
   });
   const sphereMesh = new THREE.Mesh(sphereGeo, shaderMat);
   group.add(sphereMesh);
 
-  // 2. Luminous Atmospheric Corona Sprite
-  const coronaMat = new THREE.SpriteMaterial({
+  // 2. Luminous Atmospheric Halo Glow Behind Sphere (voice agent.mp4)
+  const haloMat = new THREE.SpriteMaterial({
     map: isPatient ? glowTexturePatient : glowTextureSwastik,
     transparent: true,
     blending: THREE.AdditiveBlending,
-    opacity: 0.65,
-  });
-  const coronaSprite = new THREE.Sprite(coronaMat);
-  coronaSprite.scale.set(radius * 4.4, radius * 4.4, 1);
-  group.add(coronaSprite);
-
-  // 3. Ring 1: Inner Aura Orbit with Dotted Track
-  const ring1Group = new THREE.Group();
-  ring1Group.rotation.set(0.38 * dir, 0.18, 0);
-
-  const r1Radius = radius * 1.25;
-  const r1Pts = createCirclePoints(r1Radius, 64);
-  const r1LineGeo = new THREE.BufferGeometry().setFromPoints(r1Pts);
-  const r1LineMat = new THREE.LineBasicMaterial({
-    color: ringColor,
-    transparent: true,
-    opacity: 0.35,
-  });
-  const r1Line = new THREE.LineLoop(r1LineGeo, r1LineMat);
-  ring1Group.add(r1Line);
-
-  // Micro-dots along Ring 1
-  const r1DotPts = createCirclePoints(r1Radius, 32);
-  const r1DotGeo = new THREE.BufferGeometry().setFromPoints(r1DotPts);
-  const r1DotMat = new THREE.PointsMaterial({
-    size: 1.4,
-    map: dotTexture,
-    color: glowColor,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    opacity: 0.75,
+    opacity: 0.45,
     depthWrite: false,
   });
-  const r1Dots = new THREE.Points(r1DotGeo, r1DotMat);
-  ring1Group.add(r1Dots);
-  group.add(ring1Group);
+  const halo = new THREE.Sprite(haloMat);
+  halo.position.set(0, 0, -1.2);
+  halo.scale.set(radius * 3.6, radius * 3.6, 1);
+  group.add(halo);
 
-  // 4. Ring 2: Middle Radar Orbit with 8 Glowing Data Blips
-  const ring2Group = new THREE.Group();
-  ring2Group.rotation.set(-0.3 * dir, 0.45, 0.12);
+  // 3. Continuous Propagating Acoustic Ripple Wave Rings (voice agent.mp4)
+  const ripples = [];
+  const RIPPLE_COUNT = 5;
+  const minRippleRadius = radius * 1.15;
+  const maxRippleRadius = radius * 2.85;
 
-  const r2Radius = radius * 1.6;
-  const r2Pts = createCirclePoints(r2Radius, 64);
-  const r2LineGeo = new THREE.BufferGeometry().setFromPoints(r2Pts);
-  const r2LineMat = new THREE.LineBasicMaterial({
-    color: ringColor,
-    transparent: true,
-    opacity: 0.22,
-  });
-  const r2Line = new THREE.LineLoop(r2LineGeo, r2LineMat);
-  ring2Group.add(r2Line);
-
-  // 8 distinct glowing data blip dots
-  const r2BlipPts = createCirclePoints(r2Radius, 8);
-  const r2BlipGeo = new THREE.BufferGeometry().setFromPoints(r2BlipPts);
-  const r2BlipMat = new THREE.PointsMaterial({
-    size: 2.3,
-    map: dotTexture,
-    color: glowColor,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    opacity: 0.85,
-    depthWrite: false,
-  });
-  const r2Blips = new THREE.Points(r2BlipGeo, r2BlipMat);
-  ring2Group.add(r2Blips);
-  group.add(ring2Group);
-
-  // 5. Ring 3: Outer Horizon Orbit with Orbiting Satellite Nodes
-  const ring3Group = new THREE.Group();
-  ring3Group.rotation.set(0.42 * dir, -0.32, 0.22);
-
-  const r3Radius = radius * 2.05;
-  const r3Pts = createCirclePoints(r3Radius, 64);
-  const r3LineGeo = new THREE.BufferGeometry().setFromPoints(r3Pts);
-  const r3LineMat = new THREE.LineBasicMaterial({
-    color: ringColor,
-    transparent: true,
-    opacity: 0.16,
-  });
-  const r3Line = new THREE.LineLoop(r3LineGeo, r3LineMat);
-  ring3Group.add(r3Line);
-
-  // 3 Orbiting Satellite Blips
-  const satellites = [];
-  for (let s = 0; s < 3; s++) {
-    const satGeo = new THREE.SphereGeometry(0.32, 16, 16);
-    const satMat = new THREE.MeshBasicMaterial({
-      color: glowColor,
+  for (let i = 0; i < RIPPLE_COUNT; i++) {
+    const pts = createCirclePoints(1.0, 64);
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({
+      color: rippleColor,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
-    const satMesh = new THREE.Mesh(satGeo, satMat);
-    ring3Group.add(satMesh);
-    satellites.push({ mesh: satMesh, offset: (s * Math.PI * 2) / 3, speed: 0.0006 * (1 + s * 0.2) });
+    const line = new THREE.LineLoop(geo, mat);
+    group.add(line);
+    ripples.push({
+      line,
+      mat,
+      phase: i / RIPPLE_COUNT,
+      minRadius: minRippleRadius,
+      maxRadius: maxRippleRadius,
+      baseRadius: radius,
+    });
   }
-  group.add(ring3Group);
 
-  // 6. Ambient Orbital Stardust
-  const stardustCount = 18;
-  const stardustPts = [];
-  for (let i = 0; i < stardustCount; i++) {
-    const angle = (i / stardustCount) * Math.PI * 2;
-    const dist = radius * (1.15 + (i % 3) * 0.25);
-    stardustPts.push(
-      new THREE.Vector3(
-        Math.cos(angle) * dist,
-        Math.sin(angle) * dist,
-        (Math.sin(i * 1.5) - 0.5) * 2.5
-      )
-    );
-  }
-  const stardustGeo = new THREE.BufferGeometry().setFromPoints(stardustPts);
-  const stardustMat = new THREE.PointsMaterial({
-    size: 1.6,
-    map: dotTexture,
-    color: glowColor,
+  // 4. Subtle Tilted Gyroscopic Orbit Ring with 1 Floating Telemetry Blip
+  const orbitGroup = new THREE.Group();
+  orbitGroup.rotation.set(0.35 * dir, 0.22, 0);
+  const orbitRadius = radius * 1.55;
+  const orbitPts = createCirclePoints(orbitRadius, 64);
+  const orbitGeo = new THREE.BufferGeometry().setFromPoints(orbitPts);
+  const orbitMat = new THREE.LineBasicMaterial({
+    color: rippleColor,
     transparent: true,
+    opacity: 0.15,
     blending: THREE.AdditiveBlending,
-    opacity: 0.55,
-    depthWrite: false,
   });
-  const stardustPoints = new THREE.Points(stardustGeo, stardustMat);
-  group.add(stardustPoints);
+  const orbitLine = new THREE.LineLoop(orbitGeo, orbitMat);
+  orbitGroup.add(orbitLine);
+
+  // Single micro blip node
+  const blipGeo = new THREE.SphereGeometry(0.24, 12, 12);
+  const blipMat = new THREE.MeshBasicMaterial({
+    color: isPatient ? 0xFFF0A0 : 0x90FFF5,
+    transparent: true,
+    opacity: 0.85,
+  });
+  const blipMesh = new THREE.Mesh(blipGeo, blipMat);
+  blipMesh.position.set(orbitRadius, 0, 0);
+  orbitGroup.add(blipMesh);
+  group.add(orbitGroup);
 
   return {
     group,
     sphereMesh,
     shaderMat,
-    coronaSprite,
-    ring1Group,
-    ring2Group,
-    ring3Group,
-    satellites,
-    r3Radius,
-    stardustPoints,
+    halo,
+    haloMat,
+    ripples,
+    orbitGroup,
+    blipMesh,
+    orbitRadius,
     dir,
     baseRadius: radius,
   };
@@ -714,17 +724,60 @@ const starPoints = new THREE.Points(starGeo, starMat);
 scene.add(starPoints);
 
 // ------------------------------------------------------------------
-// 3D Holographic Camera Parallax & Mouse/Touch Tilt
+// Interactive 3D Orbit Drag & Lenis-Inspired Momentum Physics
 // ------------------------------------------------------------------
 let targetMouseX = 0;
 let targetMouseY = 0;
 let currentMouseX = 0;
 let currentMouseY = 0;
 
+let isDragging = false;
+let prevPointerX = 0;
+let prevPointerY = 0;
+let rotTargetX = 0;
+let rotTargetY = 0;
+let rotCurrentX = 0;
+let rotCurrentY = 0;
+let dragVelX = 0;
+let dragVelY = 0;
+
+window.addEventListener("pointerdown", (e) => {
+  // Allow interactive 3D rotation when dragging background / canvas
+  const isCard = e.target.closest(".hud-card, .subtitles-container, .hud-header, button, a");
+  if (!isCard) {
+    isDragging = true;
+    prevPointerX = e.clientX;
+    prevPointerY = e.clientY;
+    dragVelX = 0;
+    dragVelY = 0;
+    const dragHint = $("dragHint");
+    if (dragHint) dragHint.style.opacity = "0.3";
+  }
+});
+
 window.addEventListener("pointermove", (e) => {
   targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
   targetMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+
+  if (isDragging) {
+    const dx = e.clientX - prevPointerX;
+    const dy = e.clientY - prevPointerY;
+    prevPointerX = e.clientX;
+    prevPointerY = e.clientY;
+
+    dragVelY = dx * 0.0035;
+    dragVelX = dy * 0.0035;
+    rotTargetY += dragVelY;
+    rotTargetX += dragVelX;
+  }
 });
+
+window.addEventListener("pointerup", () => {
+  isDragging = false;
+  const dragHint = $("dragHint");
+  if (dragHint) dragHint.style.opacity = "1";
+});
+window.addEventListener("pointercancel", () => { isDragging = false; });
 
 // ------------------------------------------------------------------
 // Responsive 3D Layout & Projection
@@ -767,6 +820,36 @@ function resize() {
 window.addEventListener("resize", resize);
 
 // ------------------------------------------------------------------
+// Inspira UI 3D Card Tilt Engine (CardContainer + CardItem)
+// ------------------------------------------------------------------
+function init3DCardTilt() {
+  const cards = document.querySelectorAll(".hud-card, .subtitles-container, .hud-header");
+  cards.forEach((card) => {
+    card.addEventListener("pointermove", (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      card.style.setProperty("--mouse-x", `${(e.clientX - rect.left).toFixed(1)}px`);
+      card.style.setProperty("--mouse-y", `${(e.clientY - rect.top).toFixed(1)}px`);
+      const rotY = (x * 12).toFixed(2);
+      const rotX = (-y * 12).toFixed(2);
+      const isVis = card.classList.contains("visible") || !card.classList.contains("hud-card");
+      if (isVis) {
+        card.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(8px)`;
+      }
+    });
+
+    card.addEventListener("pointerleave", () => {
+      const isVis = card.classList.contains("visible") || !card.classList.contains("hud-card");
+      if (isVis) {
+        card.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px)";
+      }
+    });
+  });
+}
+init3DCardTilt();
+
+// ------------------------------------------------------------------
 // Main 3D WebGL Animation Loop
 // ------------------------------------------------------------------
 let lastTime = 0;
@@ -775,6 +858,10 @@ const projVector = new THREE.Vector3();
 function animate(time) {
   const delta = (time - lastTime) * 0.001;
   lastTime = time;
+
+  // Update Inspira UI Border Beam Dynamic Rotation Angle
+  const beamAngle = (time * 0.08) % 360;
+  document.documentElement.style.setProperty("--beam-angle", `${beamAngle.toFixed(1)}deg`);
 
   // Check thinking mode transition
   if (lastUserSpeechTime > 0 && !speaking && isCallActive) {
@@ -789,48 +876,56 @@ function animate(time) {
   const agentPulse = speaking ? 0.35 + Math.sin(time * 0.007) * 0.2 : 0;
   const isCommunicating = userPulse > 0.02 || speaking;
 
-  // Update Shader Uniforms
+  // Update Shader Uniforms: Dynamic Light Motion & Speech Intensity
   patientSystem.shaderMat.uniforms.uTime.value = time * 0.001;
   patientSystem.shaderMat.uniforms.uPulse.value = userPulse;
+  patientSystem.shaderMat.uniforms.uMouse.value.lerp(new THREE.Vector2(currentMouseX, currentMouseY), 0.06);
+
   swastikSystem.shaderMat.uniforms.uTime.value = time * 0.001;
   swastikSystem.shaderMat.uniforms.uPulse.value = agentPulse;
+  swastikSystem.shaderMat.uniforms.uMouse.value.lerp(new THREE.Vector2(currentMouseX, currentMouseY), 0.06);
 
-  // Corona Pulsing
-  const pScale = patientSystem.baseRadius * 4.4 * (1.0 + userPulse * 0.35);
-  patientSystem.coronaSprite.scale.set(pScale, pScale, 1);
-  patientSystem.coronaSprite.material.opacity = 0.6 + userPulse * 0.3;
+  // Organic Sphere Scale Breathing on Voice
+  patientSystem.sphereMesh.scale.setScalar(1.0 + userPulse * 0.07);
+  swastikSystem.sphereMesh.scale.setScalar(1.0 + agentPulse * 0.07);
 
-  const sScale = swastikSystem.baseRadius * 4.4 * (1.0 + agentPulse * 0.35);
-  swastikSystem.coronaSprite.scale.set(sScale, sScale, 1);
-  swastikSystem.coronaSprite.material.opacity = 0.65 + agentPulse * 0.3;
+  // Halo Glow Breathing with Light Motion (voice agent.mp4)
+  patientSystem.halo.scale.setScalar(patientSystem.baseRadius * (3.4 + Math.sin(time * 0.0016) * 0.25 + userPulse * 0.75));
+  patientSystem.haloMat.opacity = 0.35 + Math.sin(time * 0.002) * 0.08 + userPulse * 0.35;
 
-  // Gyroscopic 3D Rotations of Concentric Rings
-  patientSystem.ring1Group.rotation.z += 0.005;
-  patientSystem.ring2Group.rotation.z -= 0.0035;
-  patientSystem.ring3Group.rotation.z += 0.002;
+  swastikSystem.halo.scale.setScalar(swastikSystem.baseRadius * (3.4 + Math.sin(time * 0.0016 + 1.5) * 0.25 + agentPulse * 0.75));
+  swastikSystem.haloMat.opacity = 0.35 + Math.sin(time * 0.002 + 1.5) * 0.08 + agentPulse * 0.35;
 
-  swastikSystem.ring1Group.rotation.z -= 0.005;
-  swastikSystem.ring2Group.rotation.z += 0.0035;
-  swastikSystem.ring3Group.rotation.z -= 0.002;
-
-  // Update Orbiting Satellite Nodes on Ring 3
-  patientSystem.satellites.forEach((sat) => {
-    const satAngle = time * sat.speed + sat.offset;
-    sat.mesh.position.set(
-      Math.cos(satAngle) * patientSystem.r3Radius,
-      Math.sin(satAngle) * patientSystem.r3Radius,
-      0
-    );
+  // Continuous Acoustic Ripple Wave Propagation (Direct match to voice agent.mp4)
+  const patientSpeed = 0.0026 + userPulse * 0.0065;
+  patientSystem.ripples.forEach((rip) => {
+    rip.phase = (rip.phase + patientSpeed) % 1.0;
+    const currentR = rip.minRadius + rip.phase * (rip.maxRadius - rip.minRadius);
+    rip.line.scale.set(currentR, currentR, 1);
+    const envelope = Math.sin(rip.phase * Math.PI);
+    rip.mat.opacity = envelope * (0.12 + userPulse * 0.38);
   });
 
-  swastikSystem.satellites.forEach((sat) => {
-    const satAngle = time * sat.speed + sat.offset;
-    sat.mesh.position.set(
-      Math.cos(satAngle) * swastikSystem.r3Radius,
-      Math.sin(satAngle) * swastikSystem.r3Radius,
-      0
-    );
+  const swastikSpeed = 0.0026 + agentPulse * 0.0065;
+  swastikSystem.ripples.forEach((rip) => {
+    rip.phase = (rip.phase + swastikSpeed) % 1.0;
+    const currentR = rip.minRadius + rip.phase * (rip.maxRadius - rip.minRadius);
+    rip.line.scale.set(currentR, currentR, 1);
+    const envelope = Math.sin(rip.phase * Math.PI);
+    rip.mat.opacity = envelope * (0.12 + agentPulse * 0.38);
   });
+
+  // Subtle 3D Sphere Rotation (Smooth orbital spin)
+  patientSystem.sphereMesh.rotation.y += 0.0022;
+  patientSystem.sphereMesh.rotation.x = Math.sin(time * 0.0006) * 0.10;
+  swastikSystem.sphereMesh.rotation.y -= 0.0022;
+  swastikSystem.sphereMesh.rotation.x = Math.cos(time * 0.0007) * 0.10;
+
+  // Dynamic Gyroscopic Orbit Rings Precession
+  patientSystem.orbitGroup.rotation.z += 0.0045;
+  patientSystem.orbitGroup.rotation.x = 0.35 + Math.sin(time * 0.0007) * 0.12;
+  swastikSystem.orbitGroup.rotation.z -= 0.0045;
+  swastikSystem.orbitGroup.rotation.x = -0.35 + Math.cos(time * 0.0007) * 0.12;
 
   // Thinking Mode Indicator Animation
   if (thinkingMode) {
@@ -845,19 +940,28 @@ function animate(time) {
     thinkingGroup.visible = false;
   }
 
-  // Floating Drift
-  const driftX = Math.sin(time * 0.0008) * 0.45;
-  const driftY = Math.cos(time * 0.0012) * 0.35;
+  // Harmonic Floating Motion (Levitation & Natural Breathing)
+  const floatPatientX = Math.sin(time * 0.0009) * 0.5 + Math.cos(time * 0.0018) * 0.2;
+  const floatPatientY = Math.cos(time * 0.0012) * 0.65 + Math.sin(time * 0.0023) * 0.25;
+  const floatPatientZ = Math.sin(time * 0.0015) * 0.35;
+
+  const floatSwastikX = -Math.cos(time * 0.0010) * 0.5 + Math.sin(time * 0.0019) * 0.2;
+  const floatSwastikY = Math.sin(time * 0.0013) * 0.65 - Math.cos(time * 0.0025) * 0.25;
+  const floatSwastikZ = Math.cos(time * 0.0014) * 0.35;
+
+  // Audio Micro-Vibration & Physical Resonance
+  const vibP = userPulse > 0.05 ? (Math.random() - 0.5) * userPulse * 0.12 : 0;
+  const vibS = agentPulse > 0.05 ? (Math.random() - 0.5) * agentPulse * 0.12 : 0;
 
   patientSystem.group.position.set(
-    leftTargetPos.x + driftX,
-    leftTargetPos.y + driftY,
-    leftTargetPos.z
+    leftTargetPos.x + floatPatientX,
+    leftTargetPos.y + floatPatientY + vibP,
+    leftTargetPos.z + floatPatientZ
   );
   swastikSystem.group.position.set(
-    rightTargetPos.x - driftX * 0.7,
-    rightTargetPos.y - driftY * 0.6,
-    rightTargetPos.z
+    rightTargetPos.x + floatSwastikX,
+    rightTargetPos.y + floatSwastikY + vibS,
+    rightTargetPos.z + floatSwastikZ
   );
 
   // Update 3D Connecting Axis Filament
@@ -871,16 +975,24 @@ function animate(time) {
   axisLine.geometry.attributes.position.needsUpdate = true;
   axisLine.computeLineDistances();
 
-  // Update 3D Helical Neural Synaptic Particle Stream
+  // Update 3D Helical Neural Synaptic Particle Stream (Directional Flow)
   const sPos = streamGeo.attributes.position.array;
   const sCol = streamGeo.attributes.color.array;
   const p1 = patientSystem.group.position;
   const p2 = swastikSystem.group.position;
 
+  // Stream flows according to speaker activity
+  let flowDir = 1.0;
+  if (speaking && userPulse < 0.05) {
+    flowDir = -1.0; // flow from Swastik to Patient
+  }
+  const streamSpeedBoost = isCommunicating ? 2.6 : 1.0;
+
   for (let i = 0; i < STREAM_PARTICLE_COUNT; i++) {
     const pt = streamData[i];
-    pt.progress += pt.speed * (isCommunicating ? 2.5 : 1.0);
-    if (pt.progress > 1.0) pt.progress = 0;
+    pt.progress += pt.speed * streamSpeedBoost * flowDir;
+    if (pt.progress > 1.0) pt.progress -= 1.0;
+    if (pt.progress < 0.0) pt.progress += 1.0;
 
     const t = pt.progress;
     const strandAngle = t * Math.PI * 4 + time * 0.003 + pt.strand * 2.094;
@@ -971,12 +1083,26 @@ function animate(time) {
   // Twinkle Ambient Starfield
   starMat.opacity = 0.35 + Math.sin(time * 0.001) * 0.1;
 
-  // 3D Parallax Camera Motion
+  // 3D Parallax Camera Motion & Lenis Momentum Damping
   currentMouseX += (targetMouseX - currentMouseX) * 0.05;
   currentMouseY += (targetMouseY - currentMouseY) * 0.05;
   camera.position.x = currentMouseX * 5.5;
   camera.position.y = -currentMouseY * 3.8;
   camera.lookAt(0, 0, 0);
+
+  // Apply Lenis Momentum Drag to 3D Scene Rotation
+  if (!isDragging) {
+    rotTargetX += dragVelX;
+    rotTargetY += dragVelY;
+    dragVelX *= 0.92; // Inertia damping
+    dragVelY *= 0.92;
+    rotTargetX *= 0.985; // Spring return to neutral
+    rotTargetY *= 0.985;
+  }
+  rotCurrentX += (rotTargetX - rotCurrentX) * 0.08;
+  rotCurrentY += (rotTargetY - rotCurrentY) * 0.08;
+  scene.rotation.x = rotCurrentX;
+  scene.rotation.y = rotCurrentY;
 
   // Render 3D Scene
   renderer.render(scene, camera);
