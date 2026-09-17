@@ -3,7 +3,6 @@
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("orbCanvas");
-const ctx = canvas.getContext("2d");
 
 const stageBadgeText = $("stageBadgeText");
 const calendarCard = $("calendarCard");
@@ -117,459 +116,667 @@ function stopCallTimer() {
 }
 
 // ------------------------------------------------------------------
-// High-Tech Procedural Canvas Engine: Plasma Orbs & Neural Synapses
+// High-Tech 3D WebGL Engine: Radiant Light Core Spheres, Gyroscopic
+// Concentric Rings, Neural Synapses & Quantum Parallax (Three.js)
 // ------------------------------------------------------------------
-let width, height;
+let width = window.innerWidth;
+let height = window.innerHeight;
 let isMobile = false;
 let isTablet = false;
-let leftOrb = { x: 0, y: 0, baseRadius: 80, radius: 80, rot: 0, shockwaves: [] };
-let rightOrb = { x: 0, y: 0, baseRadius: 84, radius: 84, rot: 0, shockwaves: [] };
-let spaceParticles = [];
-let streamPhotons = [];
 
-// Celebration particles for booking burst
-let burstParticles = [];
+// Backward-compatible coordinate state for UI tracking
+let leftOrb = { x: 0, y: 0, baseRadius: 80, radius: 80, shockwaves: [] };
+let rightOrb = { x: 0, y: 0, baseRadius: 84, radius: 84, shockwaves: [] };
 
-// Lightning arc state
-let lightningArcs = [];
+// 3D Scene, Camera & WebGL Renderer
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+camera.position.set(0, 0, 85);
+
+const renderer = new THREE.WebGLRenderer({
+  canvas: canvas,
+  antialias: true,
+  alpha: true,
+  powerPreference: "high-performance",
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(width, height);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.25;
+
+// Procedural Dot and Glow Sprite Textures (Generated via Offscreen 2D Canvas)
+function createDotTexture() {
+  const c = document.createElement("canvas");
+  c.width = 64;
+  c.height = 64;
+  const cctx = c.getContext("2d");
+  const g = cctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, "rgba(255, 255, 255, 1.0)");
+  g.addColorStop(0.3, "rgba(255, 255, 255, 0.9)");
+  g.addColorStop(0.65, "rgba(255, 255, 255, 0.25)");
+  g.addColorStop(1, "rgba(255, 255, 255, 0.0)");
+  cctx.fillStyle = g;
+  cctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function createGlowTexture(isPatient) {
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const cctx = c.getContext("2d");
+  const g = cctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  if (isPatient) {
+    g.addColorStop(0, "rgba(255, 245, 210, 0.95)");
+    g.addColorStop(0.22, "rgba(245, 166, 35, 0.6)");
+    g.addColorStop(0.55, "rgba(217, 119, 6, 0.15)");
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+  } else {
+    g.addColorStop(0, "rgba(220, 255, 255, 0.95)");
+    g.addColorStop(0.22, "rgba(20, 200, 178, 0.6)");
+    g.addColorStop(0.55, "rgba(13, 148, 136, 0.15)");
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+  }
+  cctx.fillStyle = g;
+  cctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const dotTexture = createDotTexture();
+const glowTexturePatient = createGlowTexture(true);
+const glowTextureSwastik = createGlowTexture(false);
+
+// Helper: Generate circle points
+function createCirclePoints(radius, segments) {
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const theta = (i / segments) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(theta) * radius, Math.sin(theta) * radius, 0));
+  }
+  return pts;
+}
+
+// ------------------------------------------------------------------
+// GLSL Shaders: Radiant Light Core (Exact Match to voice agent.mp4)
+// Pure #FFFFFF Light Core radiating into Amber / Cyan with Fresnel rim
+// ------------------------------------------------------------------
+const sphereVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vWorldPosition;
+
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewPosition = -mvPosition.xyz;
+    vWorldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+const patientFragmentShader = `
+  uniform float uTime;
+  uniform float uPulse;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vWorldPosition;
+
+  void main() {
+    vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(vViewPosition);
+    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+
+    float shimmer = sin(vWorldPosition.x * 2.5 + uTime * 2.2) * 
+                    cos(vWorldPosition.y * 2.5 + uTime * 1.8) * 
+                    sin(vWorldPosition.z * 2.5 + uTime * 1.4) * 0.035;
+
+    float centerFactor = pow(ndv, 1.4 + uPulse * 0.45) + shimmer;
+    centerFactor = clamp(centerFactor, 0.0, 1.0);
+
+    vec3 cWhite = vec3(1.0, 1.0, 1.0);
+    vec3 cSun   = vec3(0.996, 0.941, 0.541); // #FEF08A
+    vec3 cAmber = vec3(0.961, 0.620, 0.043); // #F59E0B
+    vec3 cWarm  = vec3(0.851, 0.467, 0.024); // #D97706
+    vec3 cDark  = vec3(0.573, 0.251, 0.035); // #92400E
+
+    vec3 col;
+    float coreSpread = 0.54 + uPulse * 0.26;
+    if (centerFactor > coreSpread) {
+      float t = (centerFactor - coreSpread) / (1.0 - coreSpread + 0.001);
+      col = mix(cSun, cWhite, t);
+    } else if (centerFactor > 0.35) {
+      float t = (centerFactor - 0.35) / (coreSpread - 0.35 + 0.001);
+      col = mix(cAmber, cSun, t);
+    } else if (centerFactor > 0.12) {
+      float t = (centerFactor - 0.12) / (0.35 - 0.12);
+      col = mix(cWarm, cAmber, t);
+    } else {
+      float t = centerFactor / 0.12;
+      col = mix(cDark, cWarm, t);
+    }
+
+    float fresnel = pow(1.0 - ndv, 2.4);
+    col += vec3(1.0, 0.95, 0.8) * fresnel * (0.85 + uPulse * 0.4);
+
+    gl_FragColor = vec4(col, 0.98);
+  }
+`;
+
+const swastikFragmentShader = `
+  uniform float uTime;
+  uniform float uPulse;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  varying vec3 vWorldPosition;
+
+  void main() {
+    vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(vViewPosition);
+    float ndv = clamp(dot(normal, viewDir), 0.0, 1.0);
+
+    float shimmer = sin(vWorldPosition.x * 2.8 + uTime * 2.5) * 
+                    cos(vWorldPosition.y * 2.8 + uTime * 2.0) * 
+                    sin(vWorldPosition.z * 2.8 + uTime * 1.6) * 0.035;
+
+    float centerFactor = pow(ndv, 1.4 + uPulse * 0.45) + shimmer;
+    centerFactor = clamp(centerFactor, 0.0, 1.0);
+
+    vec3 cWhite   = vec3(1.0, 1.0, 1.0);
+    vec3 cNeon    = vec3(0.404, 0.910, 0.976); // #67E8F9
+    vec3 cTeal    = vec3(0.078, 0.722, 0.651); // #14B8A6
+    vec3 cDeep    = vec3(0.051, 0.580, 0.533); // #0D9488
+    vec3 cDark    = vec3(0.059, 0.463, 0.431); // #0F766E
+
+    vec3 col;
+    float coreSpread = 0.54 + uPulse * 0.26;
+    if (centerFactor > coreSpread) {
+      float t = (centerFactor - coreSpread) / (1.0 - coreSpread + 0.001);
+      col = mix(cNeon, cWhite, t);
+    } else if (centerFactor > 0.35) {
+      float t = (centerFactor - 0.35) / (coreSpread - 0.35 + 0.001);
+      col = mix(cTeal, cNeon, t);
+    } else if (centerFactor > 0.12) {
+      float t = (centerFactor - 0.12) / (0.35 - 0.12);
+      col = mix(cDeep, cTeal, t);
+    } else {
+      float t = centerFactor / 0.12;
+      col = mix(cDark, cDeep, t);
+    }
+
+    float fresnel = pow(1.0 - ndv, 2.4);
+    col += vec3(0.85, 1.0, 1.0) * fresnel * (0.9 + uPulse * 0.4);
+
+    gl_FragColor = vec4(col, 0.98);
+  }
+`;
+
+// ------------------------------------------------------------------
+// 3D Gyroscopic Orb System Builder
+// ------------------------------------------------------------------
+function createOrbSystem(isPatient) {
+  const group = new THREE.Group();
+  const radius = isPatient ? 6.4 : 6.7;
+  const ringColor = isPatient ? 0xF5A623 : 0x14C8B2;
+  const glowColor = isPatient ? 0xFFF0A0 : 0x90FFF5;
+  const dir = isPatient ? 1 : -1;
+
+  // 1. Radiant Light Core Sphere
+  const sphereGeo = new THREE.SphereGeometry(radius, 54, 54);
+  const shaderMat = new THREE.ShaderMaterial({
+    vertexShader: sphereVertexShader,
+    fragmentShader: isPatient ? patientFragmentShader : swastikFragmentShader,
+    uniforms: {
+      uTime: { value: 0.0 },
+      uPulse: { value: 0.0 },
+    },
+    transparent: true,
+  });
+  const sphereMesh = new THREE.Mesh(sphereGeo, shaderMat);
+  group.add(sphereMesh);
+
+  // 2. Luminous Atmospheric Corona Sprite
+  const coronaMat = new THREE.SpriteMaterial({
+    map: isPatient ? glowTexturePatient : glowTextureSwastik,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    opacity: 0.65,
+  });
+  const coronaSprite = new THREE.Sprite(coronaMat);
+  coronaSprite.scale.set(radius * 4.4, radius * 4.4, 1);
+  group.add(coronaSprite);
+
+  // 3. Ring 1: Inner Aura Orbit with Dotted Track
+  const ring1Group = new THREE.Group();
+  ring1Group.rotation.set(0.38 * dir, 0.18, 0);
+
+  const r1Radius = radius * 1.25;
+  const r1Pts = createCirclePoints(r1Radius, 64);
+  const r1LineGeo = new THREE.BufferGeometry().setFromPoints(r1Pts);
+  const r1LineMat = new THREE.LineBasicMaterial({
+    color: ringColor,
+    transparent: true,
+    opacity: 0.35,
+  });
+  const r1Line = new THREE.LineLoop(r1LineGeo, r1LineMat);
+  ring1Group.add(r1Line);
+
+  // Micro-dots along Ring 1
+  const r1DotPts = createCirclePoints(r1Radius, 32);
+  const r1DotGeo = new THREE.BufferGeometry().setFromPoints(r1DotPts);
+  const r1DotMat = new THREE.PointsMaterial({
+    size: 1.4,
+    map: dotTexture,
+    color: glowColor,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    opacity: 0.75,
+    depthWrite: false,
+  });
+  const r1Dots = new THREE.Points(r1DotGeo, r1DotMat);
+  ring1Group.add(r1Dots);
+  group.add(ring1Group);
+
+  // 4. Ring 2: Middle Radar Orbit with 8 Glowing Data Blips
+  const ring2Group = new THREE.Group();
+  ring2Group.rotation.set(-0.3 * dir, 0.45, 0.12);
+
+  const r2Radius = radius * 1.6;
+  const r2Pts = createCirclePoints(r2Radius, 64);
+  const r2LineGeo = new THREE.BufferGeometry().setFromPoints(r2Pts);
+  const r2LineMat = new THREE.LineBasicMaterial({
+    color: ringColor,
+    transparent: true,
+    opacity: 0.22,
+  });
+  const r2Line = new THREE.LineLoop(r2LineGeo, r2LineMat);
+  ring2Group.add(r2Line);
+
+  // 8 distinct glowing data blip dots
+  const r2BlipPts = createCirclePoints(r2Radius, 8);
+  const r2BlipGeo = new THREE.BufferGeometry().setFromPoints(r2BlipPts);
+  const r2BlipMat = new THREE.PointsMaterial({
+    size: 2.3,
+    map: dotTexture,
+    color: glowColor,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    opacity: 0.85,
+    depthWrite: false,
+  });
+  const r2Blips = new THREE.Points(r2BlipGeo, r2BlipMat);
+  ring2Group.add(r2Blips);
+  group.add(ring2Group);
+
+  // 5. Ring 3: Outer Horizon Orbit with Orbiting Satellite Nodes
+  const ring3Group = new THREE.Group();
+  ring3Group.rotation.set(0.42 * dir, -0.32, 0.22);
+
+  const r3Radius = radius * 2.05;
+  const r3Pts = createCirclePoints(r3Radius, 64);
+  const r3LineGeo = new THREE.BufferGeometry().setFromPoints(r3Pts);
+  const r3LineMat = new THREE.LineBasicMaterial({
+    color: ringColor,
+    transparent: true,
+    opacity: 0.16,
+  });
+  const r3Line = new THREE.LineLoop(r3LineGeo, r3LineMat);
+  ring3Group.add(r3Line);
+
+  // 3 Orbiting Satellite Blips
+  const satellites = [];
+  for (let s = 0; s < 3; s++) {
+    const satGeo = new THREE.SphereGeometry(0.32, 16, 16);
+    const satMat = new THREE.MeshBasicMaterial({
+      color: glowColor,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const satMesh = new THREE.Mesh(satGeo, satMat);
+    ring3Group.add(satMesh);
+    satellites.push({ mesh: satMesh, offset: (s * Math.PI * 2) / 3, speed: 0.0006 * (1 + s * 0.2) });
+  }
+  group.add(ring3Group);
+
+  // 6. Ambient Orbital Stardust
+  const stardustCount = 18;
+  const stardustPts = [];
+  for (let i = 0; i < stardustCount; i++) {
+    const angle = (i / stardustCount) * Math.PI * 2;
+    const dist = radius * (1.15 + (i % 3) * 0.25);
+    stardustPts.push(
+      new THREE.Vector3(
+        Math.cos(angle) * dist,
+        Math.sin(angle) * dist,
+        (Math.sin(i * 1.5) - 0.5) * 2.5
+      )
+    );
+  }
+  const stardustGeo = new THREE.BufferGeometry().setFromPoints(stardustPts);
+  const stardustMat = new THREE.PointsMaterial({
+    size: 1.6,
+    map: dotTexture,
+    color: glowColor,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    opacity: 0.55,
+    depthWrite: false,
+  });
+  const stardustPoints = new THREE.Points(stardustGeo, stardustMat);
+  group.add(stardustPoints);
+
+  return {
+    group,
+    sphereMesh,
+    shaderMat,
+    coronaSprite,
+    ring1Group,
+    ring2Group,
+    ring3Group,
+    satellites,
+    r3Radius,
+    stardustPoints,
+    dir,
+    baseRadius: radius,
+  };
+}
+
+const patientSystem = createOrbSystem(true);
+const swastikSystem = createOrbSystem(false);
+scene.add(patientSystem.group);
+scene.add(swastikSystem.group);
+
+// ------------------------------------------------------------------
+// Swastik AI Thinking Mode Orbit Ring
+// ------------------------------------------------------------------
+const thinkingGroup = new THREE.Group();
+thinkingGroup.rotation.set(-0.25, 0.35, 0);
+const thinkingNodesCount = 6;
+const thinkingNodes = [];
+for (let i = 0; i < thinkingNodesCount; i++) {
+  const tMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.35, 12, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0x00FFFF,
+      transparent: true,
+      opacity: 0.9,
+    })
+  );
+  thinkingGroup.add(tMesh);
+  thinkingNodes.push(tMesh);
+}
+thinkingGroup.visible = false;
+swastikSystem.group.add(thinkingGroup);
+
+// ------------------------------------------------------------------
+// 3D Neural Synaptic Particle Stream (Helical Bridge between Spheres)
+// ------------------------------------------------------------------
+const STREAM_PARTICLE_COUNT = 130;
+const streamPositions = new Float32Array(STREAM_PARTICLE_COUNT * 3);
+const streamColors = new Float32Array(STREAM_PARTICLE_COUNT * 3);
+const streamData = [];
+
+for (let i = 0; i < STREAM_PARTICLE_COUNT; i++) {
+  streamData.push({
+    progress: Math.random(),
+    speed: 0.002 + Math.random() * 0.0035,
+    strand: Math.floor(Math.random() * 3),
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+const streamGeo = new THREE.BufferGeometry();
+streamGeo.setAttribute("position", new THREE.BufferAttribute(streamPositions, 3));
+streamGeo.setAttribute("color", new THREE.BufferAttribute(streamColors, 3));
+
+const streamMat = new THREE.PointsMaterial({
+  size: 2.2,
+  map: dotTexture,
+  vertexColors: true,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  opacity: 0.85,
+  depthWrite: false,
+});
+const streamPoints = new THREE.Points(streamGeo, streamMat);
+scene.add(streamPoints);
+
+// ------------------------------------------------------------------
+// 3D Connecting Quantum Filament (Axis Line)
+// ------------------------------------------------------------------
+const axisLineGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(0, 0, 0),
+]);
+const axisLineMat = new THREE.LineDashedMaterial({
+  color: 0x64748B,
+  dashSize: 1.5,
+  gapSize: 2.5,
+  transparent: true,
+  opacity: 0.25,
+});
+const axisLine = new THREE.Line(axisLineGeo, axisLineMat);
+scene.add(axisLine);
+
+// ------------------------------------------------------------------
+// 3D Interactive Lightning Arcs
+// ------------------------------------------------------------------
+const LIGHTNING_SEGMENTS = 16;
+const lightningPoints = [];
+for (let i = 0; i <= LIGHTNING_SEGMENTS; i++) {
+  lightningPoints.push(new THREE.Vector3(0, 0, 0));
+}
+const lightningGeo = new THREE.BufferGeometry().setFromPoints(lightningPoints);
+const lightningMat = new THREE.LineBasicMaterial({
+  color: 0x64F0FF,
+  transparent: true,
+  opacity: 0,
+  blending: THREE.AdditiveBlending,
+  linewidth: 1.5,
+});
+const lightningLine = new THREE.Line(lightningGeo, lightningMat);
+scene.add(lightningLine);
+
 let lastLightningTime = 0;
 
-function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  width = window.innerWidth;
-  height = window.innerHeight;
-  canvas.width = Math.floor(width * dpr);
-  canvas.height = Math.floor(height * dpr);
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-  isMobile = width <= 600;
-  isTablet = width > 600 && width <= 1024;
-
-  if (isMobile) {
-    leftOrb.baseRadius = Math.max(36, Math.min(48, width * 0.11));
-    rightOrb.baseRadius = Math.max(40, Math.min(52, width * 0.12));
-    leftOrb.x = width * 0.5;
-    leftOrb.y = height * 0.22;
-    rightOrb.x = width * 0.5;
-    rightOrb.y = height * 0.44;
-  } else if (isTablet) {
-    leftOrb.baseRadius = Math.max(55, Math.min(70, width * 0.08));
-    rightOrb.baseRadius = Math.max(60, Math.min(75, width * 0.085));
-    leftOrb.x = width * 0.28;
-    leftOrb.y = height * 0.42;
-    rightOrb.x = width * 0.72;
-    rightOrb.y = height * 0.42;
-  } else {
-    leftOrb.baseRadius = 80;
-    rightOrb.baseRadius = 84;
-    leftOrb.x = width * 0.28;
-    leftOrb.y = height * 0.46;
-    rightOrb.x = width * 0.72;
-    rightOrb.y = height * 0.46;
-  }
-
-  const badgeContainer = $("stageBadgeContainer");
-  if (badgeContainer) {
-    badgeContainer.style.left = `${leftOrb.x}px`;
-    badgeContainer.style.top = `${leftOrb.y - leftOrb.baseRadius - (isMobile ? 32 : 45)}px`;
-  }
-}
-window.addEventListener("resize", resize);
-
-// Ambient Floating Cosmic Dust
-for (let i = 0; i < 65; i++) {
-  spaceParticles.push({
-    x: Math.random() * 2000,
-    y: Math.random() * 1200,
-    vx: (Math.random() - 0.5) * 0.3,
-    vy: (Math.random() - 0.5) * 0.3,
-    size: Math.random() * 1.8 + 0.5,
-    alpha: Math.random() * 0.5 + 0.1,
-  });
-}
-
-// Quantum Photons along Neural Synapse
-for (let i = 0; i < 45; i++) {
-  streamPhotons.push({
-    progress: Math.random(),
-    speed: Math.random() * 0.004 + 0.0015,
-    strand: Math.floor(Math.random() * 3),
-    size: Math.random() * 2.2 + 1,
-    alpha: Math.random() * 0.8 + 0.2,
-  });
-}
-
-// ------------------------------------------------------------------
-// Shockwave Pulse System
-// ------------------------------------------------------------------
-function triggerShockwave(orb) {
-  orb.shockwaves.push({ r: orb.baseRadius * 0.9, alpha: 0.7, speed: 2.5 });
-}
-
-function drawShockwaves(orb, isPatient) {
-  const color = isPatient ? "245, 166, 35" : "20, 200, 178";
-  orb.shockwaves.forEach((sw) => {
-    sw.r += sw.speed;
-    sw.alpha -= 0.012;
-    if (sw.alpha <= 0) return;
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(${color}, ${sw.alpha.toFixed(3)})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(orb.x, orb.y, sw.r, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner glow ring
-    ctx.strokeStyle = `rgba(${color}, ${(sw.alpha * 0.4).toFixed(3)})`;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(orb.x, orb.y, sw.r - 2, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  });
-  orb.shockwaves = orb.shockwaves.filter((sw) => sw.alpha > 0);
-}
-
-// ------------------------------------------------------------------
-// Lightning Arc System
-// ------------------------------------------------------------------
-function generateLightningPath(x1, y1, x2, y2, segments) {
-  const points = [{ x: x1, y: y1 }];
-  for (let i = 1; i < segments; i++) {
-    const t = i / segments;
-    const mx = x1 + (x2 - x1) * t;
-    const my = y1 + (y2 - y1) * t;
-    const jitter = (1 - Math.abs(t - 0.5) * 2) * 35;
-    points.push({
-      x: mx + (Math.random() - 0.5) * jitter,
-      y: my + (Math.random() - 0.5) * jitter,
-    });
-  }
-  points.push({ x: x2, y: y2 });
-  return points;
-}
-
 function spawnLightning() {
-  let sx, sy, ex, ey;
-  if (isMobile) {
-    sx = leftOrb.x;
-    sy = leftOrb.y + leftOrb.baseRadius;
-    ex = rightOrb.x;
-    ey = rightOrb.y - rightOrb.baseRadius;
-  } else {
-    sx = leftOrb.x + leftOrb.baseRadius;
-    sy = leftOrb.y;
-    ex = rightOrb.x - rightOrb.baseRadius;
-    ey = rightOrb.y;
+  const p1 = patientSystem.group.position;
+  const p2 = swastikSystem.group.position;
+  const posArray = lightningGeo.attributes.position.array;
+
+  for (let i = 0; i <= LIGHTNING_SEGMENTS; i++) {
+    const t = i / LIGHTNING_SEGMENTS;
+    const envelope = Math.sin(t * Math.PI);
+    const jitter = envelope * 4.5;
+    const idx = i * 3;
+    posArray[idx] = p1.x + (p2.x - p1.x) * t + (Math.random() - 0.5) * jitter;
+    posArray[idx + 1] = p1.y + (p2.y - p1.y) * t + (Math.random() - 0.5) * jitter;
+    posArray[idx + 2] = p1.z + (p2.z - p1.z) * t + (Math.random() - 0.5) * jitter;
   }
-  const segments = 12 + Math.floor(Math.random() * 6);
-  lightningArcs.push({
-    points: generateLightningPath(sx, sy, ex, ey, segments),
-    alpha: 0.8,
-    width: Math.random() * 1.5 + 0.5,
-  });
-}
-
-function drawLightning() {
-  lightningArcs.forEach((arc) => {
-    arc.alpha -= 0.04;
-    if (arc.alpha <= 0) return;
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(100, 240, 255, ${arc.alpha.toFixed(3)})`;
-    ctx.lineWidth = arc.width;
-    ctx.shadowColor = "rgba(100, 240, 255, 0.6)";
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(arc.points[0].x, arc.points[0].y);
-    for (let i = 1; i < arc.points.length; i++) {
-      ctx.lineTo(arc.points[i].x, arc.points[i].y);
-    }
-    ctx.stroke();
-    ctx.restore();
-  });
-  lightningArcs = lightningArcs.filter((a) => a.alpha > 0);
+  lightningGeo.attributes.position.needsUpdate = true;
+  lightningMat.opacity = 0.95;
 }
 
 // ------------------------------------------------------------------
-// Booking Celebration Particle Burst
+// 3D Expanding Shockwaves
 // ------------------------------------------------------------------
+let activeShockwaves = [];
+
+function triggerShockwave(targetOrb) {
+  const isPatient = targetOrb === leftOrb;
+  const targetGroup = isPatient ? patientSystem.group : swastikSystem.group;
+  const color = isPatient ? 0xF5A623 : 0x14C8B2;
+
+  const ringGeo = new THREE.RingGeometry(targetGroup.scale.x * 6.5, targetGroup.scale.x * 6.7, 64);
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: color,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+  ringMesh.position.copy(targetGroup.position);
+  scene.add(ringMesh);
+
+  activeShockwaves.push({
+    mesh: ringMesh,
+    scale: 1.0,
+    opacity: 0.85,
+    speed: 0.045,
+  });
+}
+
+// ------------------------------------------------------------------
+// 3D Booking Celebration Particle Burst
+// ------------------------------------------------------------------
+let burstMesh = null;
+let burstData = [];
+
 function triggerBookingBurst() {
-  const cx = rightOrb.x;
-  const cy = rightOrb.y;
-  for (let i = 0; i < 40; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = Math.random() * 4 + 1.5;
-    burstParticles.push({
-      x: cx,
-      y: cy,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      alpha: 1.0,
-      size: Math.random() * 3 + 1,
-      color: Math.random() > 0.5 ? "20, 200, 178" : "110, 231, 183",
+  const burstCount = 65;
+  const origin = swastikSystem.group.position;
+  burstData = [];
+
+  const bPositions = new Float32Array(burstCount * 3);
+  const bColors = new Float32Array(burstCount * 3);
+
+  for (let i = 0; i < burstCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(Math.random() * 2 - 1);
+    const speed = 0.35 + Math.random() * 0.95;
+
+    burstData.push({
+      x: origin.x,
+      y: origin.y,
+      z: origin.z,
+      vx: Math.sin(phi) * Math.cos(theta) * speed,
+      vy: Math.sin(phi) * Math.sin(theta) * speed,
+      vz: Math.cos(phi) * speed,
+      life: 1.0,
+      decay: 0.012 + Math.random() * 0.008,
     });
+
+    const isCyan = Math.random() > 0.4;
+    bColors[i * 3] = isCyan ? 0.2 : 0.45;
+    bColors[i * 3 + 1] = isCyan ? 0.95 : 0.92;
+    bColors[i * 3 + 2] = isCyan ? 0.9 : 0.72;
   }
+
+  const bGeo = new THREE.BufferGeometry();
+  bGeo.setAttribute("position", new THREE.BufferAttribute(bPositions, 3));
+  bGeo.setAttribute("color", new THREE.BufferAttribute(bColors, 3));
+
+  const bMat = new THREE.PointsMaterial({
+    size: 2.8,
+    map: dotTexture,
+    vertexColors: true,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    opacity: 1.0,
+    depthWrite: false,
+  });
+
+  if (burstMesh) scene.remove(burstMesh);
+  burstMesh = new THREE.Points(bGeo, bMat);
+  scene.add(burstMesh);
+
   triggerShockwave(rightOrb);
   triggerShockwave(leftOrb);
 }
 
-function drawBurstParticles() {
-  burstParticles.forEach((p) => {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.vx *= 0.97;
-    p.vy *= 0.97;
-    p.alpha -= 0.012;
-    if (p.alpha <= 0) return;
-
-    ctx.save();
-    ctx.fillStyle = `rgba(${p.color}, ${p.alpha.toFixed(3)})`;
-    ctx.shadowColor = `rgba(${p.color}, ${(p.alpha * 0.5).toFixed(3)})`;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  });
-  burstParticles = burstParticles.filter((p) => p.alpha > 0);
+// ------------------------------------------------------------------
+// 3D Ambient Cosmic Starfield
+// ------------------------------------------------------------------
+const STAR_COUNT = 180;
+const starPositions = new Float32Array(STAR_COUNT * 3);
+for (let i = 0; i < STAR_COUNT; i++) {
+  starPositions[i * 3] = (Math.random() - 0.5) * 140;
+  starPositions[i * 3 + 1] = (Math.random() - 0.5) * 90;
+  starPositions[i * 3 + 2] = (Math.random() - 0.5) * 120 - 20;
 }
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
+const starMat = new THREE.PointsMaterial({
+  size: 1.3,
+  map: dotTexture,
+  color: 0x94A3B8,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  opacity: 0.4,
+  depthWrite: false,
+});
+const starPoints = new THREE.Points(starGeo, starMat);
+scene.add(starPoints);
 
 // ------------------------------------------------------------------
-// Thinking Indicator (pulsing glow & orbiting AI thought dots)
+// 3D Holographic Camera Parallax & Mouse/Touch Tilt
 // ------------------------------------------------------------------
-function drawThinkingIndicator(time) {
-  if (!thinkingMode) return;
+let targetMouseX = 0;
+let targetMouseY = 0;
+let currentMouseX = 0;
+let currentMouseY = 0;
 
-  const pulseAlpha = 0.2 + Math.sin(time * 0.008) * 0.12;
-  const pulseR = rightOrb.baseRadius * (1.45 + Math.sin(time * 0.006) * 0.15);
-
-  ctx.save();
-  const grad = ctx.createRadialGradient(
-    rightOrb.x, rightOrb.y, rightOrb.baseRadius * 0.7,
-    rightOrb.x, rightOrb.y, pulseR
-  );
-  grad.addColorStop(0, `rgba(20, 200, 178, ${pulseAlpha.toFixed(3)})`);
-  grad.addColorStop(0.5, `rgba(0, 229, 255, ${(pulseAlpha * 0.5).toFixed(3)})`);
-  grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(rightOrb.x, rightOrb.y, pulseR, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Rapid orbiting thought-processing dots
-  const numThoughtDots = 6;
-  for (let i = 0; i < numThoughtDots; i++) {
-    const angle = time * 0.005 + (i * Math.PI * 2) / numThoughtDots;
-    const orbitR = rightOrb.baseRadius * (1.3 + Math.sin(time * 0.004 + i) * 0.08);
-    const dx = rightOrb.x + Math.cos(angle) * orbitR;
-    const dy = rightOrb.y + Math.sin(angle) * orbitR;
-
-    ctx.fillStyle = `rgba(0, 229, 255, ${0.7 + Math.sin(time * 0.01 + i) * 0.3})`;
-    ctx.shadowColor = "rgba(0, 229, 255, 0.9)";
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(dx, dy, 2.8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
+window.addEventListener("pointermove", (e) => {
+  targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+  targetMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+});
 
 // ------------------------------------------------------------------
-// High-Tech Sentient AI Orb Engine — Inspired by voice agent.mp4:
-// Radiant Light Core, Ethereal Atmospheric Corona, Concentric
-// Orbital Rings with Dotted Tracks and Traveling Satellite Nodes
+// Responsive 3D Layout & Projection
 // ------------------------------------------------------------------
-function drawCinematicOrb(orb, pulse, isPatient, time) {
-  const r = orb.baseRadius + pulse * 14;
-  const ringColor = isPatient ? "245, 166, 35" : "20, 200, 178";
-  const glowColor = isPatient ? "255, 235, 150" : "150, 255, 245";
-  const direction = isPatient ? 1 : -1;
+let leftTargetPos = new THREE.Vector3();
+let rightTargetPos = new THREE.Vector3();
 
-  // 1. Luminous Atmospheric Corona / Outer Diffuse Bloom
-  const coronaRadius = r * (2.2 + pulse * 0.4);
-  const corona = ctx.createRadialGradient(orb.x, orb.y, r * 0.4, orb.x, orb.y, coronaRadius);
-  if (isPatient) {
-    corona.addColorStop(0, `rgba(245, 166, 35, ${0.35 + pulse * 0.25})`);
-    corona.addColorStop(0.35, `rgba(245, 166, 35, ${0.12 + pulse * 0.12})`);
-    corona.addColorStop(0.7, "rgba(217, 119, 6, 0.03)");
-    corona.addColorStop(1, "rgba(0, 0, 0, 0)");
+function resize() {
+  width = window.innerWidth;
+  height = window.innerHeight;
+
+  renderer.setSize(width, height);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  isMobile = width <= 768 || (width <= 900 && height > width);
+  isTablet = !isMobile && width <= 1024;
+
+  const vFOV = (camera.fov * Math.PI) / 180;
+  const visibleHeight = 2 * Math.tan(vFOV / 2) * camera.position.z;
+  const visibleWidth = visibleHeight * camera.aspect;
+
+  if (isMobile) {
+    // Stacked vertically on mobile / portrait view
+    leftTargetPos.set(0, visibleHeight * 0.18, 0);
+    rightTargetPos.set(0, -visibleHeight * 0.14, 0);
+    patientSystem.group.scale.setScalar(0.68);
+    swastikSystem.group.scale.setScalar(0.70);
+  } else if (isTablet) {
+    leftTargetPos.set(-visibleWidth * 0.22, 0, 0);
+    rightTargetPos.set(visibleWidth * 0.22, 0, 0);
+    patientSystem.group.scale.setScalar(0.9);
+    swastikSystem.group.scale.setScalar(0.92);
   } else {
-    corona.addColorStop(0, `rgba(20, 200, 178, ${0.4 + pulse * 0.28})`);
-    corona.addColorStop(0.35, `rgba(0, 229, 255, ${0.14 + pulse * 0.14})`);
-    corona.addColorStop(0.7, "rgba(13, 148, 136, 0.03)");
-    corona.addColorStop(1, "rgba(0, 0, 0, 0)");
+    leftTargetPos.set(-visibleWidth * 0.23, 0, 0);
+    rightTargetPos.set(visibleWidth * 0.23, 0, 0);
+    patientSystem.group.scale.setScalar(1.0);
+    swastikSystem.group.scale.setScalar(1.02);
   }
-  ctx.fillStyle = corona;
-  ctx.beginPath();
-  ctx.arc(orb.x, orb.y, coronaRadius, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 2. Concentric Orbital Rings with Subtle Dot-Dot Patterns
-  // Ring 1: Inner Aura Orbit with Breathing Offset
-  const ring1R = r * 1.24 + Math.sin(time * 0.002) * 2 + pulse * 4;
-  ctx.save();
-  ctx.strokeStyle = `rgba(${ringColor}, ${0.28 + pulse * 0.2})`;
-  ctx.lineWidth = 1.0;
-  ctx.beginPath();
-  ctx.arc(orb.x, orb.y, ring1R, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Subtle micro-dots along Ring 1
-  const numDots1 = 32;
-  const rot1 = time * 0.0003 * direction;
-  for (let i = 0; i < numDots1; i++) {
-    const angle = rot1 + (i * Math.PI * 2) / numDots1;
-    const dx = orb.x + Math.cos(angle) * ring1R;
-    const dy = orb.y + Math.sin(angle) * ring1R;
-    const isMajor = i % 4 === 0;
-    const dotAlpha = isMajor ? 0.8 : 0.35;
-    const dotSize = isMajor ? 1.8 + pulse * 0.6 : 1.1;
-
-    ctx.fillStyle = `rgba(${glowColor}, ${dotAlpha})`;
-    ctx.beginPath();
-    ctx.arc(dx, dy, dotSize, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // Ring 2: Middle Dotted Orbit (Dashed / Dotted Radar Track)
-  const ring2R = r * 1.58 + Math.sin(time * 0.0016 + 1) * 2 + pulse * 6;
-  const rot2 = -time * 0.00025 * direction;
-  ctx.save();
-  ctx.strokeStyle = `rgba(${ringColor}, ${0.2 + pulse * 0.15})`;
-  ctx.lineWidth = 1.0;
-  ctx.setLineDash([3, 8]);
-  ctx.beginPath();
-  ctx.arc(orb.x, orb.y, ring2R, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // 8 distinct glowing data blip dots along Ring 2
-  ctx.setLineDash([]);
-  for (let i = 0; i < 8; i++) {
-    const angle = rot2 + (i * Math.PI * 2) / 8;
-    const dx = orb.x + Math.cos(angle) * ring2R;
-    const dy = orb.y + Math.sin(angle) * ring2R;
-
-    ctx.fillStyle = `rgba(${glowColor}, ${0.75 + pulse * 0.25})`;
-    ctx.shadowColor = `rgba(${glowColor}, 0.8)`;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.arc(dx, dy, 2.2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // Ring 3: Outer Horizon Orbit with Orbiting Satellite Nodes
-  const ring3R = r * 2.02 + Math.sin(time * 0.0012 + 2) * 2 + pulse * 8;
-  ctx.save();
-  ctx.strokeStyle = `rgba(${ringColor}, 0.12)`;
-  ctx.lineWidth = 0.9;
-  ctx.setLineDash([2, 12]);
-  ctx.beginPath();
-  ctx.arc(orb.x, orb.y, ring3R, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // 3 Traveling Satellite Blip Nodes with trailing micro-dots
-  for (let s = 0; s < 3; s++) {
-    const speed = 0.0004 * (s === 1 ? -1.2 : 1) * (1 + s * 0.3);
-    const satAngle = time * speed + (s * Math.PI * 2) / 3;
-    const satX = orb.x + Math.cos(satAngle) * ring3R;
-    const satY = orb.y + Math.sin(satAngle) * ring3R;
-
-    ctx.fillStyle = `rgba(${glowColor}, 0.95)`;
-    ctx.shadowColor = `rgba(${glowColor}, 0.9)`;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(satX, satY, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2 trailing dots
-    for (let t = 1; t <= 2; t++) {
-      const trailAngle = satAngle - speed * t * 14;
-      const tx = orb.x + Math.cos(trailAngle) * ring3R;
-      const ty = orb.y + Math.sin(trailAngle) * ring3R;
-      ctx.fillStyle = `rgba(${glowColor}, ${0.5 - t * 0.2})`;
-      ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.arc(tx, ty, 1.4 - t * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.restore();
-
-  // 3. Ambient Orbital Stardust Dots around the Sphere
-  ctx.save();
-  for (let i = 0; i < 16; i++) {
-    const dustAngle = (i * Math.PI * 2) / 16 + Math.sin(time * 0.001 + i) * 0.2;
-    const dustDist = r * (1.1 + Math.sin(time * 0.0015 + i * 1.5) * 0.35);
-    const px = orb.x + Math.cos(dustAngle) * dustDist;
-    const py = orb.y + Math.sin(dustAngle) * dustDist;
-    const pAlpha = 0.25 + Math.sin(time * 0.003 + i) * 0.2 + pulse * 0.2;
-
-    ctx.fillStyle = `rgba(${glowColor}, ${pAlpha})`;
-    ctx.beginPath();
-    ctx.arc(px, py, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-
-  // 4. Perfect Spherical Core with Radiant Light Core (Exact Match to voice agent.mp4)
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
-
-  const coreGrad = ctx.createRadialGradient(
-    orb.x, orb.y, 0,
-    orb.x, orb.y, r
-  );
-
-  if (isPatient) {
-    // Pure radiant white light core expanding outward into golden amber
-    coreGrad.addColorStop(0, "#FFFFFF");
-    coreGrad.addColorStop(0.10 + pulse * 0.06, "rgba(255, 255, 245, 1)");
-    coreGrad.addColorStop(0.24 + pulse * 0.08, "#FEF08A");
-    coreGrad.addColorStop(0.44 + pulse * 0.06, "#F59E0B");
-    coreGrad.addColorStop(0.68, "#D97706");
-    coreGrad.addColorStop(0.88, "#B45309");
-    coreGrad.addColorStop(1.0, "rgba(146, 64, 14, 0.9)");
-  } else {
-    // Pure radiant cyan-white light core expanding outward into electric teal
-    coreGrad.addColorStop(0, "#FFFFFF");
-    coreGrad.addColorStop(0.10 + pulse * 0.06, "rgba(224, 255, 255, 1)");
-    coreGrad.addColorStop(0.24 + pulse * 0.08, "#67E8F9");
-    coreGrad.addColorStop(0.44 + pulse * 0.06, "#14B8A6");
-    coreGrad.addColorStop(0.68, "#0D9488");
-    coreGrad.addColorStop(0.88, "#0F766E");
-    coreGrad.addColorStop(1.0, "rgba(15, 118, 110, 0.9)");
-  }
-
-  ctx.fillStyle = coreGrad;
-  ctx.fill();
-
-  // 5. Crisp Glowing Atmospheric Rim / Limb Stroke
-  ctx.strokeStyle = isPatient ? "rgba(255, 245, 210, 0.6)" : "rgba(200, 255, 250, 0.6)";
-  ctx.lineWidth = 1.2;
-  ctx.shadowColor = isPatient ? "rgba(245, 166, 35, 0.5)" : "rgba(20, 200, 178, 0.5)";
-  ctx.shadowBlur = 6;
-  ctx.stroke();
-
-  ctx.restore();
 }
+window.addEventListener("resize", resize);
 
 // ------------------------------------------------------------------
-// Main Animation Loop
+// Main 3D WebGL Animation Loop
 // ------------------------------------------------------------------
 let lastTime = 0;
+const projVector = new THREE.Vector3();
 
 function animate(time) {
-  ctx.clearRect(0, 0, width, height);
+  const delta = (time - lastTime) * 0.001;
   lastTime = time;
 
-  // Check if we should enter thinking mode
+  // Check thinking mode transition
   if (lastUserSpeechTime > 0 && !speaking && isCallActive) {
     const elapsed = performance.now() - lastUserSpeechTime;
     if (elapsed > 800 && elapsed < 15000) {
@@ -577,123 +784,247 @@ function animate(time) {
     }
   }
 
-  // 1. Ambient Floating Stardust (optimized on mobile)
-  const activeParticleLimit = isMobile ? 24 : spaceParticles.length;
-  for (let i = 0; i < activeParticleLimit; i++) {
-    const p = spaceParticles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    if (p.x < 0) p.x = width;
-    if (p.x > width) p.x = 0;
-    if (p.y < 0) p.y = height;
-    if (p.y > height) p.y = 0;
-
-    ctx.fillStyle = `rgba(148, 163, 184, ${p.alpha})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Calculate dynamic pulses
+  // Audio Pulses
   const userPulse = Math.min(1.2, userRMS * 8);
   const agentPulse = speaking ? 0.35 + Math.sin(time * 0.007) * 0.2 : 0;
-
-  // Responsive Organic Floating Motion — subtle sinusoidal drift
-  const driftX = Math.sin(time * 0.0008) * 4;
-  const driftY = Math.cos(time * 0.0012) * 3;
-
-  if (isMobile) {
-    leftOrb.x = width * 0.5 + Math.sin(time * 0.001) * 2;
-    leftOrb.y = height * 0.22 + driftY;
-    rightOrb.x = width * 0.5 - Math.sin(time * 0.001) * 2;
-    rightOrb.y = height * 0.44 - driftY * 0.7;
-  } else if (isTablet) {
-    leftOrb.x = width * 0.28 + driftX;
-    leftOrb.y = height * 0.42 + driftY;
-    rightOrb.x = width * 0.72 - driftX * 0.7;
-    rightOrb.y = height * 0.42 - driftY * 0.6;
-  } else {
-    leftOrb.x = width * 0.28 + driftX;
-    leftOrb.y = height * 0.46 + driftY;
-    rightOrb.x = width * 0.72 - driftX * 0.7;
-    rightOrb.y = height * 0.46 - driftY * 0.6;
-  }
-
-  // Dynamic tracking for Stage Status Badge
-  const badgeContainer = $("stageBadgeContainer");
-  if (badgeContainer) {
-    badgeContainer.style.left = `${leftOrb.x}px`;
-    badgeContainer.style.top = `${leftOrb.y - leftOrb.baseRadius - (isMobile ? 32 : 45)}px`;
-  }
-
-  // 2. Axis Line between Orbs (vertical on mobile, horizontal on tablet/desktop)
-  ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([2, 5]);
-  ctx.beginPath();
-  ctx.moveTo(leftOrb.x, leftOrb.y);
-  ctx.lineTo(rightOrb.x, rightOrb.y);
-  ctx.stroke();
-  ctx.restore();
-
-  // 3. Discrete Data Dot Chain (vertical on mobile, horizontal on tablet/desktop)
   const isCommunicating = userPulse > 0.02 || speaking;
-  const activePhotonLimit = isMobile ? 20 : streamPhotons.length;
-  for (let i = 0; i < activePhotonLimit; i++) {
-    const pt = streamPhotons[i];
-    pt.progress += pt.speed * (isCommunicating ? 2.6 : 1.0);
-    if (pt.progress > 1) pt.progress = 0;
 
-    let px, py;
-    const waveOffset = Math.sin(pt.progress * Math.PI * 3 + time * 0.003 + pt.strand) * 3;
+  // Update Shader Uniforms
+  patientSystem.shaderMat.uniforms.uTime.value = time * 0.001;
+  patientSystem.shaderMat.uniforms.uPulse.value = userPulse;
+  swastikSystem.shaderMat.uniforms.uTime.value = time * 0.001;
+  swastikSystem.shaderMat.uniforms.uPulse.value = agentPulse;
+
+  // Corona Pulsing
+  const pScale = patientSystem.baseRadius * 4.4 * (1.0 + userPulse * 0.35);
+  patientSystem.coronaSprite.scale.set(pScale, pScale, 1);
+  patientSystem.coronaSprite.material.opacity = 0.6 + userPulse * 0.3;
+
+  const sScale = swastikSystem.baseRadius * 4.4 * (1.0 + agentPulse * 0.35);
+  swastikSystem.coronaSprite.scale.set(sScale, sScale, 1);
+  swastikSystem.coronaSprite.material.opacity = 0.65 + agentPulse * 0.3;
+
+  // Gyroscopic 3D Rotations of Concentric Rings
+  patientSystem.ring1Group.rotation.z += 0.005;
+  patientSystem.ring2Group.rotation.z -= 0.0035;
+  patientSystem.ring3Group.rotation.z += 0.002;
+
+  swastikSystem.ring1Group.rotation.z -= 0.005;
+  swastikSystem.ring2Group.rotation.z += 0.0035;
+  swastikSystem.ring3Group.rotation.z -= 0.002;
+
+  // Update Orbiting Satellite Nodes on Ring 3
+  patientSystem.satellites.forEach((sat) => {
+    const satAngle = time * sat.speed + sat.offset;
+    sat.mesh.position.set(
+      Math.cos(satAngle) * patientSystem.r3Radius,
+      Math.sin(satAngle) * patientSystem.r3Radius,
+      0
+    );
+  });
+
+  swastikSystem.satellites.forEach((sat) => {
+    const satAngle = time * sat.speed + sat.offset;
+    sat.mesh.position.set(
+      Math.cos(satAngle) * swastikSystem.r3Radius,
+      Math.sin(satAngle) * swastikSystem.r3Radius,
+      0
+    );
+  });
+
+  // Thinking Mode Indicator Animation
+  if (thinkingMode) {
+    thinkingGroup.visible = true;
+    thinkingGroup.rotation.z += 0.035;
+    for (let i = 0; i < thinkingNodesCount; i++) {
+      const angle = (i / thinkingNodesCount) * Math.PI * 2;
+      const r = swastikSystem.baseRadius * (1.45 + Math.sin(time * 0.006 + i) * 0.1);
+      thinkingNodes[i].position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0);
+    }
+  } else {
+    thinkingGroup.visible = false;
+  }
+
+  // Floating Drift
+  const driftX = Math.sin(time * 0.0008) * 0.45;
+  const driftY = Math.cos(time * 0.0012) * 0.35;
+
+  patientSystem.group.position.set(
+    leftTargetPos.x + driftX,
+    leftTargetPos.y + driftY,
+    leftTargetPos.z
+  );
+  swastikSystem.group.position.set(
+    rightTargetPos.x - driftX * 0.7,
+    rightTargetPos.y - driftY * 0.6,
+    rightTargetPos.z
+  );
+
+  // Update 3D Connecting Axis Filament
+  const axisPositions = axisLine.geometry.attributes.position.array;
+  axisPositions[0] = patientSystem.group.position.x;
+  axisPositions[1] = patientSystem.group.position.y;
+  axisPositions[2] = patientSystem.group.position.z;
+  axisPositions[3] = swastikSystem.group.position.x;
+  axisPositions[4] = swastikSystem.group.position.y;
+  axisPositions[5] = swastikSystem.group.position.z;
+  axisLine.geometry.attributes.position.needsUpdate = true;
+  axisLine.computeLineDistances();
+
+  // Update 3D Helical Neural Synaptic Particle Stream
+  const sPos = streamGeo.attributes.position.array;
+  const sCol = streamGeo.attributes.color.array;
+  const p1 = patientSystem.group.position;
+  const p2 = swastikSystem.group.position;
+
+  for (let i = 0; i < STREAM_PARTICLE_COUNT; i++) {
+    const pt = streamData[i];
+    pt.progress += pt.speed * (isCommunicating ? 2.5 : 1.0);
+    if (pt.progress > 1.0) pt.progress = 0;
+
+    const t = pt.progress;
+    const strandAngle = t * Math.PI * 4 + time * 0.003 + pt.strand * 2.094;
+    const helixRadius = (1.2 + Math.sin(t * Math.PI) * 1.5) * (isMobile ? 0.6 : 1.0);
+
+    const baseX = p1.x + (p2.x - p1.x) * t;
+    const baseY = p1.y + (p2.y - p1.y) * t;
+    const baseZ = p1.z + (p2.z - p1.z) * t;
+
+    // Cross vector offsets for 3D helix
+    const idx = i * 3;
     if (isMobile) {
-      const startY = leftOrb.y + leftOrb.baseRadius;
-      const endY = rightOrb.y - rightOrb.baseRadius;
-      px = leftOrb.x + waveOffset + (pt.strand - 1) * 2.5;
-      py = startY + (endY - startY) * pt.progress;
+      sPos[idx] = baseX + Math.cos(strandAngle) * helixRadius;
+      sPos[idx + 1] = baseY;
+      sPos[idx + 2] = baseZ + Math.sin(strandAngle) * helixRadius;
     } else {
-      const startX = leftOrb.x + leftOrb.baseRadius;
-      const endX = rightOrb.x - rightOrb.baseRadius;
-      px = startX + (endX - startX) * pt.progress;
-      py = leftOrb.y + waveOffset + (pt.strand - 1) * 2.5;
+      sPos[idx] = baseX;
+      sPos[idx + 1] = baseY + Math.sin(strandAngle) * helixRadius;
+      sPos[idx + 2] = baseZ + Math.cos(strandAngle) * helixRadius;
     }
 
-    const isNearAgent = pt.progress > 0.5;
-    const dotColor = isNearAgent ? `rgba(180, 255, 245, ${pt.alpha})` : `rgba(255, 230, 160, ${pt.alpha})`;
-
-    ctx.save();
-    ctx.fillStyle = dotColor;
-    ctx.shadowColor = dotColor;
-    ctx.shadowBlur = isCommunicating ? 6 : 3;
-    ctx.beginPath();
-    ctx.arc(px, py, pt.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    // Color gradient: Gold near Patient -> Cyan near Swastik
+    sCol[idx] = THREE.MathUtils.lerp(0.96, 0.2, t);
+    sCol[idx + 1] = THREE.MathUtils.lerp(0.65, 0.95, t);
+    sCol[idx + 2] = THREE.MathUtils.lerp(0.15, 0.9, t);
   }
+  streamGeo.attributes.position.needsUpdate = true;
+  streamGeo.attributes.color.needsUpdate = true;
 
-  // 4. Lightning Arcs (spawn during active communication)
-  if (isCommunicating && time - lastLightningTime > 300 + Math.random() * 700) {
+  // 3D Lightning Arc during Voice Communication
+  if (isCommunicating && time - lastLightningTime > 320 + Math.random() * 650) {
     spawnLightning();
     lastLightningTime = time;
   }
-  drawLightning();
+  if (lightningMat.opacity > 0) {
+    lightningMat.opacity -= 0.045;
+  }
 
-  // 5. Render Spherical Orbs
-  drawCinematicOrb(leftOrb, userPulse, true, time);
-  drawCinematicOrb(rightOrb, agentPulse, false, time);
+  // Update 3D Shockwaves
+  for (let i = activeShockwaves.length - 1; i >= 0; i--) {
+    const sw = activeShockwaves[i];
+    sw.scale += sw.speed;
+    sw.opacity -= 0.018;
+    sw.mesh.scale.set(sw.scale, sw.scale, sw.scale);
+    sw.mesh.material.opacity = Math.max(0, sw.opacity);
 
-  // 6. Draw Shockwaves
-  drawShockwaves(leftOrb, true);
-  drawShockwaves(rightOrb, false);
+    if (sw.opacity <= 0) {
+      scene.remove(sw.mesh);
+      sw.mesh.geometry.dispose();
+      sw.mesh.material.dispose();
+      activeShockwaves.splice(i, 1);
+    }
+  }
 
-  // 7. Thinking Indicator
-  drawThinkingIndicator(time);
+  // Update 3D Booking Celebration Particles
+  if (burstMesh) {
+    let anyAlive = false;
+    const bPos = burstMesh.geometry.attributes.position.array;
+    for (let i = 0; i < burstData.length; i++) {
+      const b = burstData[i];
+      if (b.life <= 0) continue;
+      anyAlive = true;
+      b.x += b.vx;
+      b.y += b.vy;
+      b.z += b.vz;
+      b.vx *= 0.96;
+      b.vy *= 0.96;
+      b.vz *= 0.96;
+      b.life -= b.decay;
 
-  // 8. Burst Particles
-  drawBurstParticles();
+      const idx = i * 3;
+      bPos[idx] = b.x;
+      bPos[idx + 1] = b.y;
+      bPos[idx + 2] = b.z;
+    }
+    burstMesh.geometry.attributes.position.needsUpdate = true;
+    burstMesh.material.opacity = Math.max(0, burstData[0]?.life || 0);
 
-  // 9. Update Mini Waveform Equalizer Bars
+    if (!anyAlive) {
+      scene.remove(burstMesh);
+      burstMesh.geometry.dispose();
+      burstMesh.material.dispose();
+      burstMesh = null;
+      burstData = [];
+    }
+  }
+
+  // Twinkle Ambient Starfield
+  starMat.opacity = 0.35 + Math.sin(time * 0.001) * 0.1;
+
+  // 3D Parallax Camera Motion
+  currentMouseX += (targetMouseX - currentMouseX) * 0.05;
+  currentMouseY += (targetMouseY - currentMouseY) * 0.05;
+  camera.position.x = currentMouseX * 5.5;
+  camera.position.y = -currentMouseY * 3.8;
+  camera.lookAt(0, 0, 0);
+
+  // Render 3D Scene
+  renderer.render(scene, camera);
+
+  // Screen Space Projections for HUD overlays & Stage Status Badge
+  patientSystem.group.getWorldPosition(projVector);
+  projVector.project(camera);
+  const leftScreenX = (projVector.x * 0.5 + 0.5) * width;
+  const leftScreenY = (-(projVector.y * 0.5) + 0.5) * height;
+
+  swastikSystem.group.getWorldPosition(projVector);
+  projVector.project(camera);
+  const rightScreenX = (projVector.x * 0.5 + 0.5) * width;
+  const rightScreenY = (-(projVector.y * 0.5) + 0.5) * height;
+
+  leftOrb.x = leftScreenX;
+  leftOrb.y = leftScreenY;
+  rightOrb.x = rightScreenX;
+  rightOrb.y = rightScreenY;
+
+  const badgeContainer = $("stageBadgeContainer");
+  if (badgeContainer) {
+    badgeContainer.style.left = `${leftScreenX}px`;
+    badgeContainer.style.top = `${leftScreenY - (isMobile ? 78 : 94)}px`;
+  }
+
+  // Dynamically position orb labels on desktop/tablet
+  const orbLabels = document.querySelector(".orb-labels-container");
+  if (orbLabels && !isMobile) {
+    const pBlock = orbLabels.querySelector(".patient");
+    const sBlock = orbLabels.querySelector(".swastik");
+    if (pBlock) {
+      pBlock.style.position = "absolute";
+      pBlock.style.left = `${leftScreenX}px`;
+      pBlock.style.top = `${leftScreenY + 75}px`;
+      pBlock.style.transform = "translateX(-50%)";
+      pBlock.style.margin = "0";
+    }
+    if (sBlock) {
+      sBlock.style.position = "absolute";
+      sBlock.style.left = `${rightScreenX}px`;
+      sBlock.style.top = `${rightScreenY + 75}px`;
+      sBlock.style.transform = "translateX(-50%)";
+      sBlock.style.margin = "0";
+    }
+  }
+
+  // Update Mini Equalizer Bars
   if (waveBars && waveBars.length) {
     const activeLevel = speaking ? agentPulse : userPulse;
     waveBars.forEach((bar, idx) => {
