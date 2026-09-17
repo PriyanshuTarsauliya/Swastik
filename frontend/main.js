@@ -662,7 +662,8 @@ function playVoice(buf) {
 
   const now = audioCtx.currentTime;
   if (nextStart < now) {
-    nextStart = now + 0.04;
+    // Increase buffer delay to 0.15s to reduce stuttering/buffering
+    nextStart = now + 0.15;
   }
   src.start(nextStart);
   nextStart += ab.duration;
