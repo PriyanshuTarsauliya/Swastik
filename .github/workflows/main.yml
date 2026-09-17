@@ -51,14 +51,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Render Deploy Hook (if configured)
-        if: "${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}"
+      - name: Trigger Render Deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
-          curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-
-      - name: Trigger Render Deploy via API (if API Key & Service ID configured)
-        if: "${{ secrets.RENDER_API_KEY != '' && secrets.RENDER_SERVICE_ID != '' }}"
-        run: |
-          curl -f -X POST "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
-            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-            -H "Accept: application/json"
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "Triggering deployment via Render Deploy Hook..."
+            curl -f -X POST "$RENDER_DEPLOY_HOOK_URL"
+          elif [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+            echo "Triggering deployment via Render API..."
+            curl -f -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Accept: application/json"
+          else
+            echo "No Render deployment credentials configured in repository secrets. Skipping deploy."
+          fi
