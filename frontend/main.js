@@ -339,119 +339,224 @@ function drawBurstParticles() {
 }
 
 // ------------------------------------------------------------------
-// Thinking Indicator (pulsing glow on Swastik orb)
+// Thinking Indicator (pulsing glow & orbiting AI thought dots)
 // ------------------------------------------------------------------
 function drawThinkingIndicator(time) {
   if (!thinkingMode) return;
 
-  const pulseAlpha = 0.15 + Math.sin(time * 0.008) * 0.1;
-  const pulseR = rightOrb.baseRadius * (1.4 + Math.sin(time * 0.005) * 0.15);
+  const pulseAlpha = 0.2 + Math.sin(time * 0.008) * 0.12;
+  const pulseR = rightOrb.baseRadius * (1.45 + Math.sin(time * 0.006) * 0.15);
 
   ctx.save();
   const grad = ctx.createRadialGradient(
-    rightOrb.x, rightOrb.y, rightOrb.baseRadius * 0.8,
+    rightOrb.x, rightOrb.y, rightOrb.baseRadius * 0.7,
     rightOrb.x, rightOrb.y, pulseR
   );
   grad.addColorStop(0, `rgba(20, 200, 178, ${pulseAlpha.toFixed(3)})`);
-  grad.addColorStop(0.6, `rgba(0, 229, 255, ${(pulseAlpha * 0.4).toFixed(3)})`);
+  grad.addColorStop(0.5, `rgba(0, 229, 255, ${(pulseAlpha * 0.5).toFixed(3)})`);
   grad.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.arc(rightOrb.x, rightOrb.y, pulseR, 0, Math.PI * 2);
   ctx.fill();
 
-  // Three small rotating dots orbiting the orb
-  for (let i = 0; i < 3; i++) {
-    const angle = time * 0.004 + (i * Math.PI * 2) / 3;
-    const orbitR = rightOrb.baseRadius * 1.25;
+  // Rapid orbiting thought-processing dots
+  const numThoughtDots = 6;
+  for (let i = 0; i < numThoughtDots; i++) {
+    const angle = time * 0.005 + (i * Math.PI * 2) / numThoughtDots;
+    const orbitR = rightOrb.baseRadius * (1.3 + Math.sin(time * 0.004 + i) * 0.08);
     const dx = rightOrb.x + Math.cos(angle) * orbitR;
     const dy = rightOrb.y + Math.sin(angle) * orbitR;
-    ctx.fillStyle = `rgba(20, 200, 178, ${0.6 + Math.sin(time * 0.01 + i) * 0.3})`;
+
+    ctx.fillStyle = `rgba(0, 229, 255, ${0.7 + Math.sin(time * 0.01 + i) * 0.3})`;
+    ctx.shadowColor = "rgba(0, 229, 255, 0.9)";
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+    ctx.arc(dx, dy, 2.8, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
 }
 
 // ------------------------------------------------------------------
-// Cinematic Luminous 3D Spherical Orb with Concentric Ripple Rings
+// High-Tech Sentient AI Orb Engine — Inspired by voice agent.mp4:
+// Radiant Light Core, Ethereal Atmospheric Corona, Concentric
+// Orbital Rings with Dotted Tracks and Traveling Satellite Nodes
 // ------------------------------------------------------------------
 function drawCinematicOrb(orb, pulse, isPatient, time) {
   const r = orb.baseRadius + pulse * 14;
+  const ringColor = isPatient ? "245, 166, 35" : "20, 200, 178";
+  const glowColor = isPatient ? "255, 235, 150" : "150, 255, 245";
+  const direction = isPatient ? 1 : -1;
 
-  // 1. Soft Ambient Atmospheric Scatter Glow
-  const diffuseGlow = ctx.createRadialGradient(orb.x, orb.y, r * 0.5, orb.x, orb.y, r * 2.8);
+  // 1. Luminous Atmospheric Corona / Outer Diffuse Bloom
+  const coronaRadius = r * (2.2 + pulse * 0.4);
+  const corona = ctx.createRadialGradient(orb.x, orb.y, r * 0.4, orb.x, orb.y, coronaRadius);
   if (isPatient) {
-    diffuseGlow.addColorStop(0, `rgba(245, 166, 35, ${0.25 + pulse * 0.2})`);
-    diffuseGlow.addColorStop(0.4, `rgba(245, 166, 35, ${0.08 + pulse * 0.1})`);
-    diffuseGlow.addColorStop(0.8, "rgba(217, 119, 6, 0.02)");
-    diffuseGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    corona.addColorStop(0, `rgba(245, 166, 35, ${0.35 + pulse * 0.25})`);
+    corona.addColorStop(0.35, `rgba(245, 166, 35, ${0.12 + pulse * 0.12})`);
+    corona.addColorStop(0.7, "rgba(217, 119, 6, 0.03)");
+    corona.addColorStop(1, "rgba(0, 0, 0, 0)");
   } else {
-    diffuseGlow.addColorStop(0, `rgba(20, 200, 178, ${0.3 + pulse * 0.25})`);
-    diffuseGlow.addColorStop(0.4, `rgba(0, 229, 255, ${0.09 + pulse * 0.1})`);
-    diffuseGlow.addColorStop(0.8, "rgba(13, 148, 136, 0.02)");
-    diffuseGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+    corona.addColorStop(0, `rgba(20, 200, 178, ${0.4 + pulse * 0.28})`);
+    corona.addColorStop(0.35, `rgba(0, 229, 255, ${0.14 + pulse * 0.14})`);
+    corona.addColorStop(0.7, "rgba(13, 148, 136, 0.03)");
+    corona.addColorStop(1, "rgba(0, 0, 0, 0)");
   }
-  ctx.fillStyle = diffuseGlow;
+  ctx.fillStyle = corona;
   ctx.beginPath();
-  ctx.arc(orb.x, orb.y, r * 2.8, 0, Math.PI * 2);
+  ctx.arc(orb.x, orb.y, coronaRadius, 0, Math.PI * 2);
   ctx.fill();
 
-  // 2. Multi-layered Concentric Ripple Aura Rings
-  const ringMultipliers = [1.22, 1.52, 1.9, 2.38];
-  const ringBaseAlphas = isPatient ? [0.18, 0.11, 0.06, 0.03] : [0.22, 0.13, 0.07, 0.035];
-  const ringColor = isPatient ? "245, 166, 35" : "20, 200, 178";
+  // 2. Concentric Orbital Rings with Subtle Dot-Dot Patterns
+  // Ring 1: Inner Aura Orbit with Breathing Offset
+  const ring1R = r * 1.24 + Math.sin(time * 0.002) * 2 + pulse * 4;
+  ctx.save();
+  ctx.strokeStyle = `rgba(${ringColor}, ${0.28 + pulse * 0.2})`;
+  ctx.lineWidth = 1.0;
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, ring1R, 0, Math.PI * 2);
+  ctx.stroke();
 
-  ringMultipliers.forEach((mult, idx) => {
-    ctx.save();
-    const breathingOffset = Math.sin(time * 0.002 + idx * 0.8) * 2;
-    const ringR = r * mult + breathingOffset + pulse * 10 * (1 - idx * 0.2);
-    const ringAlpha = Math.max(0.01, ringBaseAlphas[idx] + pulse * 0.15 * (1 - idx * 0.2));
+  // Subtle micro-dots along Ring 1
+  const numDots1 = 32;
+  const rot1 = time * 0.0003 * direction;
+  for (let i = 0; i < numDots1; i++) {
+    const angle = rot1 + (i * Math.PI * 2) / numDots1;
+    const dx = orb.x + Math.cos(angle) * ring1R;
+    const dy = orb.y + Math.sin(angle) * ring1R;
+    const isMajor = i % 4 === 0;
+    const dotAlpha = isMajor ? 0.8 : 0.35;
+    const dotSize = isMajor ? 1.8 + pulse * 0.6 : 1.1;
 
-    ctx.strokeStyle = `rgba(${ringColor}, ${ringAlpha.toFixed(3)})`;
-    ctx.lineWidth = 1.0;
+    ctx.fillStyle = `rgba(${glowColor}, ${dotAlpha})`;
     ctx.beginPath();
-    ctx.arc(orb.x, orb.y, ringR, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  });
+    ctx.arc(dx, dy, dotSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 
-  // 3. Perfect Spherical Core with 3D Specular Highlight
+  // Ring 2: Middle Dotted Orbit (Dashed / Dotted Radar Track)
+  const ring2R = r * 1.58 + Math.sin(time * 0.0016 + 1) * 2 + pulse * 6;
+  const rot2 = -time * 0.00025 * direction;
+  ctx.save();
+  ctx.strokeStyle = `rgba(${ringColor}, ${0.2 + pulse * 0.15})`;
+  ctx.lineWidth = 1.0;
+  ctx.setLineDash([3, 8]);
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, ring2R, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 8 distinct glowing data blip dots along Ring 2
+  ctx.setLineDash([]);
+  for (let i = 0; i < 8; i++) {
+    const angle = rot2 + (i * Math.PI * 2) / 8;
+    const dx = orb.x + Math.cos(angle) * ring2R;
+    const dy = orb.y + Math.sin(angle) * ring2R;
+
+    ctx.fillStyle = `rgba(${glowColor}, ${0.75 + pulse * 0.25})`;
+    ctx.shadowColor = `rgba(${glowColor}, 0.8)`;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(dx, dy, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // Ring 3: Outer Horizon Orbit with Orbiting Satellite Nodes
+  const ring3R = r * 2.02 + Math.sin(time * 0.0012 + 2) * 2 + pulse * 8;
+  ctx.save();
+  ctx.strokeStyle = `rgba(${ringColor}, 0.12)`;
+  ctx.lineWidth = 0.9;
+  ctx.setLineDash([2, 12]);
+  ctx.beginPath();
+  ctx.arc(orb.x, orb.y, ring3R, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 3 Traveling Satellite Blip Nodes with trailing micro-dots
+  for (let s = 0; s < 3; s++) {
+    const speed = 0.0004 * (s === 1 ? -1.2 : 1) * (1 + s * 0.3);
+    const satAngle = time * speed + (s * Math.PI * 2) / 3;
+    const satX = orb.x + Math.cos(satAngle) * ring3R;
+    const satY = orb.y + Math.sin(satAngle) * ring3R;
+
+    ctx.fillStyle = `rgba(${glowColor}, 0.95)`;
+    ctx.shadowColor = `rgba(${glowColor}, 0.9)`;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(satX, satY, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2 trailing dots
+    for (let t = 1; t <= 2; t++) {
+      const trailAngle = satAngle - speed * t * 14;
+      const tx = orb.x + Math.cos(trailAngle) * ring3R;
+      const ty = orb.y + Math.sin(trailAngle) * ring3R;
+      ctx.fillStyle = `rgba(${glowColor}, ${0.5 - t * 0.2})`;
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 1.4 - t * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // 3. Ambient Orbital Stardust Dots around the Sphere
+  ctx.save();
+  for (let i = 0; i < 16; i++) {
+    const dustAngle = (i * Math.PI * 2) / 16 + Math.sin(time * 0.001 + i) * 0.2;
+    const dustDist = r * (1.1 + Math.sin(time * 0.0015 + i * 1.5) * 0.35);
+    const px = orb.x + Math.cos(dustAngle) * dustDist;
+    const py = orb.y + Math.sin(dustAngle) * dustDist;
+    const pAlpha = 0.25 + Math.sin(time * 0.003 + i) * 0.2 + pulse * 0.2;
+
+    ctx.fillStyle = `rgba(${glowColor}, ${pAlpha})`;
+    ctx.beginPath();
+    ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 4. Perfect Spherical Core with Radiant Light Core (Exact Match to voice agent.mp4)
   ctx.save();
   ctx.beginPath();
   ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
 
-  const highlightOffsetX = orb.x;
-  const highlightOffsetY = orb.y - r * 0.1;
   const coreGrad = ctx.createRadialGradient(
-    highlightOffsetX, highlightOffsetY, r * 0.02,
+    orb.x, orb.y, 0,
     orb.x, orb.y, r
   );
 
   if (isPatient) {
-    coreGrad.addColorStop(0, "#FFFBEB");
-    coreGrad.addColorStop(0.18, "#FEF3C7");
-    coreGrad.addColorStop(0.45, "#F59E0B");
-    coreGrad.addColorStop(0.78, "#B45309");
-    coreGrad.addColorStop(0.94, "#78350F");
-    coreGrad.addColorStop(1, "#3F1D06");
+    // Pure radiant white light core expanding outward into golden amber
+    coreGrad.addColorStop(0, "#FFFFFF");
+    coreGrad.addColorStop(0.10 + pulse * 0.06, "rgba(255, 255, 245, 1)");
+    coreGrad.addColorStop(0.24 + pulse * 0.08, "#FEF08A");
+    coreGrad.addColorStop(0.44 + pulse * 0.06, "#F59E0B");
+    coreGrad.addColorStop(0.68, "#D97706");
+    coreGrad.addColorStop(0.88, "#B45309");
+    coreGrad.addColorStop(1.0, "rgba(146, 64, 14, 0.9)");
   } else {
-    coreGrad.addColorStop(0, "#D8FFFB");
-    coreGrad.addColorStop(0.18, "#6EE7B7");
-    coreGrad.addColorStop(0.45, "#14B8A6");
-    coreGrad.addColorStop(0.78, "#0F766E");
-    coreGrad.addColorStop(0.94, "#0B4E48");
-    coreGrad.addColorStop(1, "#042A27");
+    // Pure radiant cyan-white light core expanding outward into electric teal
+    coreGrad.addColorStop(0, "#FFFFFF");
+    coreGrad.addColorStop(0.10 + pulse * 0.06, "rgba(224, 255, 255, 1)");
+    coreGrad.addColorStop(0.24 + pulse * 0.08, "#67E8F9");
+    coreGrad.addColorStop(0.44 + pulse * 0.06, "#14B8A6");
+    coreGrad.addColorStop(0.68, "#0D9488");
+    coreGrad.addColorStop(0.88, "#0F766E");
+    coreGrad.addColorStop(1.0, "rgba(15, 118, 110, 0.9)");
   }
 
   ctx.fillStyle = coreGrad;
   ctx.fill();
 
-  // 4. Crisp Glowing Atmospheric Rim / Limb Stroke
-  ctx.strokeStyle = isPatient ? "rgba(255, 235, 180, 0.45)" : "rgba(110, 240, 225, 0.45)";
+  // 5. Crisp Glowing Atmospheric Rim / Limb Stroke
+  ctx.strokeStyle = isPatient ? "rgba(255, 245, 210, 0.6)" : "rgba(200, 255, 250, 0.6)";
   ctx.lineWidth = 1.2;
+  ctx.shadowColor = isPatient ? "rgba(245, 166, 35, 0.5)" : "rgba(20, 200, 178, 0.5)";
+  ctx.shadowBlur = 6;
   ctx.stroke();
+
   ctx.restore();
 }
 
@@ -541,25 +646,30 @@ function animate(time) {
     if (pt.progress > 1) pt.progress = 0;
 
     let px, py;
+    const waveOffset = Math.sin(pt.progress * Math.PI * 3 + time * 0.003 + pt.strand) * 3;
     if (isMobile) {
       const startY = leftOrb.y + leftOrb.baseRadius;
       const endY = rightOrb.y - rightOrb.baseRadius;
-      px = leftOrb.x;
+      px = leftOrb.x + waveOffset + (pt.strand - 1) * 2.5;
       py = startY + (endY - startY) * pt.progress;
     } else {
       const startX = leftOrb.x + leftOrb.baseRadius;
       const endX = rightOrb.x - rightOrb.baseRadius;
       px = startX + (endX - startX) * pt.progress;
-      py = leftOrb.y;
+      py = leftOrb.y + waveOffset + (pt.strand - 1) * 2.5;
     }
 
     const isNearAgent = pt.progress > 0.5;
     const dotColor = isNearAgent ? `rgba(180, 255, 245, ${pt.alpha})` : `rgba(255, 230, 160, ${pt.alpha})`;
 
+    ctx.save();
     ctx.fillStyle = dotColor;
+    ctx.shadowColor = dotColor;
+    ctx.shadowBlur = isCommunicating ? 6 : 3;
     ctx.beginPath();
     ctx.arc(px, py, pt.size, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
 
   // 4. Lightning Arcs (spawn during active communication)
