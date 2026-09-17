@@ -582,6 +582,90 @@ function handleToolAction(cmd) {
     }
 
     triggerShockwave(rightOrb);
+  } else if (cmd.action === "show_upi_payment" && cmd.data) {
+    setStage("UPI PAYMENT");
+    const upiCard = $("upiCard");
+    if (upiCard) upiCard.classList.add("visible");
+
+    const upiQrImg = $("upiQrImg");
+    const upiPayBtn = $("upiPayBtn");
+    const upiPayeeName = $("upiPayeeName");
+    const upiIdEl = $("upiId");
+    const upiAmountEl = $("upiAmount");
+
+    if (upiQrImg && cmd.data.qr_url) upiQrImg.src = cmd.data.qr_url;
+    if (upiPayBtn && cmd.data.upi_link) upiPayBtn.href = cmd.data.upi_link;
+    if (upiPayeeName && cmd.data.payee_name) upiPayeeName.textContent = cmd.data.payee_name;
+    if (upiIdEl && cmd.data.upi_id) upiIdEl.textContent = `UPI: ${cmd.data.upi_id}`;
+    if (upiAmountEl && cmd.data.amount) upiAmountEl.textContent = `₹${cmd.data.amount}`;
+
+    // Wire up the receipt upload handler
+    const receiptInput = $("receiptUpload");
+    if (receiptInput && !receiptInput._wired) {
+      receiptInput._wired = true;
+      receiptInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const uploadFileName = $("uploadFileName");
+        if (uploadFileName) uploadFileName.textContent = file.name;
+
+        // Show pending status
+        const verifyStatus = $("upiVerifyStatus");
+        const verifyIcon = $("upiVerifyIcon");
+        const verifyText = $("upiVerifyText");
+        const verifyDetails = $("upiVerifyDetails");
+
+        if (verifyStatus) {
+          verifyStatus.style.display = "flex";
+          verifyStatus.className = "upi-verify-status pending";
+        }
+        if (verifyIcon) verifyIcon.textContent = "⏳";
+        if (verifyText) verifyText.textContent = "Verifying payment with AI...";
+        if (verifyDetails) verifyDetails.style.display = "none";
+
+        setStage("VERIFYING RECEIPT");
+
+        try {
+          const formData = new FormData();
+          formData.append("file", file);
+          const resp = await fetch("/upload-receipt", { method: "POST", body: formData });
+          const result = await resp.json();
+
+          if (result.verified) {
+            if (verifyStatus) verifyStatus.className = "upi-verify-status verified";
+            if (verifyIcon) verifyIcon.textContent = "✅";
+            if (verifyText) verifyText.textContent = "PAYMENT VERIFIED";
+            setStage("PAYMENT CONFIRMED");
+            triggerBookingBurst();
+          } else {
+            if (verifyStatus) verifyStatus.className = "upi-verify-status failed";
+            if (verifyIcon) verifyIcon.textContent = "❌";
+            if (verifyText) verifyText.textContent = "VERIFICATION FAILED";
+            setStage("PAYMENT ISSUE");
+          }
+
+          // Show details
+          if (verifyDetails) {
+            let detailsHTML = "";
+            if (result.status) detailsHTML += `Status: ${result.status}<br>`;
+            if (result.amount) detailsHTML += `Amount: ${result.amount}<br>`;
+            if (result.payee) detailsHTML += `Payee: ${result.payee}<br>`;
+            if (result.utr) detailsHTML += `UTR: ${result.utr}<br>`;
+            if (result.reason) detailsHTML += `${result.reason}`;
+            verifyDetails.innerHTML = detailsHTML;
+            verifyDetails.style.display = "block";
+          }
+        } catch (err) {
+          if (verifyStatus) verifyStatus.className = "upi-verify-status failed";
+          if (verifyIcon) verifyIcon.textContent = "❌";
+          if (verifyText) verifyText.textContent = "Upload failed — try again";
+          setStage("UPLOAD ERROR");
+        }
+      });
+    }
+
+    triggerShockwave(rightOrb);
   } else if (cmd.action === "slot_update" && cmd.slots) {
     updateSlotsUI(cmd.slots);
   }

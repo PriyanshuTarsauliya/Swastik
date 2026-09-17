@@ -471,6 +471,185 @@
     background: #20BA56;
   }
 
+  /* UPI Payment Card */
+  .upi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .upi-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #7C3AED;
+  }
+
+  .upi-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: rgba(124, 58, 237, 0.15);
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #A78BFA;
+  }
+
+  .upi-amount {
+    font-size: 16px;
+    font-weight: 800;
+    color: #A78BFA;
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+  }
+
+  .upi-payee {
+    font-size: 13px;
+    font-weight: 700;
+    color: #E2E8F0;
+    letter-spacing: 0.02em;
+  }
+
+  .upi-id-label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+    margin-bottom: 12px;
+  }
+
+  .upi-qr-container {
+    display: flex;
+    justify-content: center;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+
+  .upi-qr-img {
+    width: 140px;
+    height: 140px;
+    border-radius: 6px;
+    image-rendering: pixelated;
+  }
+
+  .upi-pay-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+    color: #fff;
+    text-decoration: none;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+  }
+
+  .upi-pay-btn:hover {
+    background: linear-gradient(135deg, #6D28D9, #5B21B6);
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .upi-upload-section {
+    margin-bottom: 8px;
+  }
+
+  .upi-upload-label {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 14px;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px dashed rgba(124, 58, 237, 0.35);
+    color: #A78BFA;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.04em;
+  }
+
+  .upi-upload-label:hover {
+    background: rgba(124, 58, 237, 0.15);
+    border-color: rgba(124, 58, 237, 0.6);
+  }
+
+  .upload-file-name {
+    font-size: 9px;
+    color: #64748B;
+    text-align: center;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .upi-verify-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 4px;
+  }
+
+  .upi-verify-status.pending {
+    border-color: rgba(234, 179, 8, 0.4);
+    background: rgba(234, 179, 8, 0.06);
+  }
+
+  .upi-verify-status.verified {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.08);
+    box-shadow: 0 0 18px rgba(16, 185, 129, 0.15);
+  }
+
+  .upi-verify-status.failed {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.06);
+  }
+
+  .verify-icon {
+    font-size: 20px;
+  }
+
+  .verify-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: #E2E8F0;
+    letter-spacing: 0.04em;
+  }
+
+  .upi-verify-details {
+    font-size: 9px;
+    color: #94A3B8;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 6px;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
   /* Subtitle Captions Area (Lower Third) */
   .subtitles-container {
     width: 100%;
@@ -724,6 +903,47 @@
           <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24"><path fill="currentColor" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
           Send WhatsApp Now
         </a>
+      </div>
+
+      <!-- UPI Payment Card -->
+      <div id="upiCard" class="hud-card">
+        <div class="upi-header">
+          <div class="upi-title">
+            <span class="upi-icon">₹</span>
+            <span>UPI Payment</span>
+          </div>
+          <span id="upiAmount" class="upi-amount">₹499</span>
+        </div>
+        <div id="upiPayeeName" class="upi-payee">Dr Gunja Gupta</div>
+        <div id="upiId" class="upi-id-label">UPI: 6387831138-2@ibl</div>
+
+        <!-- QR Code -->
+        <div class="upi-qr-container">
+          <img id="upiQrImg" class="upi-qr-img" src="" alt="UPI QR Code" />
+        </div>
+
+        <!-- Pay Button (deep link for mobile) -->
+        <a id="upiPayBtn" href="#" class="upi-pay-btn">
+          <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg>
+          Pay ₹499 via UPI App
+        </a>
+
+        <!-- Upload Receipt -->
+        <div class="upi-upload-section">
+          <label for="receiptUpload" class="upi-upload-label">
+            <svg style="width:14px;height:14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload Payment Screenshot
+          </label>
+          <input type="file" id="receiptUpload" accept="image/*" style="display:none" />
+          <div id="uploadFileName" class="upload-file-name"></div>
+        </div>
+
+        <!-- Verification Status -->
+        <div id="upiVerifyStatus" class="upi-verify-status" style="display:none">
+          <div id="upiVerifyIcon" class="verify-icon">⏳</div>
+          <div id="upiVerifyText" class="verify-text">Verifying payment...</div>
+        </div>
+        <div id="upiVerifyDetails" class="upi-verify-details" style="display:none"></div>
       </div>
     </div>
 

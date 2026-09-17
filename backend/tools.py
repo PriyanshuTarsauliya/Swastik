@@ -1,5 +1,15 @@
 """Swastik Healthcare tools for Gemini Live API session."""
 
+import io
+import os
+import logging
+import urllib.parse
+from pathlib import Path
+
+import qrcode
+
+log = logging.getLogger("swastik-agent")
+
 TOOL_DECLARATIONS = [
     {
         "name": "get_clinic_info",
@@ -58,6 +68,18 @@ TOOL_DECLARATIONS = [
                 "consultation_mode": {"type": "string", "description": "Consultation mode: 'Online' or 'Offline'"},
             },
             "required": ["patient_name", "slot_time"],
+        },
+    },
+    {
+        "name": "generate_upi_payment",
+        "description": "Generate a UPI payment QR code and deep link for the ₹499 consultation fee. Call this after booking is confirmed so the patient can pay immediately.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "patient_name": {"type": "string", "description": "Patient's name for the transaction note"},
+                "amount": {"type": "string", "description": "Amount to pay (default: 499)"},
+            },
+            "required": ["patient_name"],
         },
     },
 ]
@@ -139,6 +161,35 @@ def dispatch_tool(name: str, args: dict):
             
         wa_url = f"https://wa.me/{clean_phone}?text={urllib.parse.quote(message_text)}"
 
+        import os
+        from twilio.rest import Client
+        import logging
+        log = logging.getLogger("swastik-agent")
+
+        sid = os.environ.get("TWILIO_ACCOUNT_SID")
+        token = os.environ.get("TWILIO_AUTH_TOKEN")
+        from_num = os.environ.get("TWILIO_WHATSAPP_NUMBER")
+        
+        if sid and token and from_num:
+            try:
+                client = Client(sid, token)
+                content_sid = os.environ.get("TWILIO_CONTENT_SID")
+                if content_sid:
+                    msg = client.messages.create(
+                        from_=from_num,
+                        content_sid=content_sid,
+                        to=f"whatsapp:+{clean_phone}"
+                    )
+                else:
+                    msg = client.messages.create(
+                        from_=from_num,
+                        body=message_text,
+                        to=f"whatsapp:+{clean_phone}"
+                    )
+                log.info(f"Twilio message sent: {msg.sid}")
+            except Exception as e:
+                log.error(f"Failed to send Twilio message: {e}")
+
         wa_data = {
             "phone": phone,
             "patient_name": patient_name,
@@ -151,5 +202,43 @@ def dispatch_tool(name: str, args: dict):
             "wa_url": wa_url
         }
         return {"action": "whatsapp_send", "data": wa_data}, {"result": "ok", "whatsapp": wa_data}
+
+    if name == "generate_upi_payment":
+        patient_name = args.get("patient_name", "Patient")
+        amount = args.get("amount", "499")
+        upi_id = os.environ.get("UPI_ID", "6387831138-2@ibl")
+        payee_name = os.environ.get("UPI_PAYEE_NAME", "Dr Gunja Gupta")
+
+        # Build the UPI deep link
+        upi_params = urllib.parse.urlencode({
+            "pa": upi_id,
+            "pn": payee_name,
+            "am": amount,
+            "cu": "INR",
+            "tn": f"Consultation fee - {patient_name}",
+        })
+        upi_link = f"upi://pay?{upi_params}"
+
+        # Generate QR code PNG and save to assets/
+        assets_dir = Path(__file__).resolve().parents[1] / "assets"
+        assets_dir.mkdir(exist_ok=True)
+        qr_path = assets_dir / "upi_qr.png"
+
+        qr = qrcode.QRCode(version=1, box_size=8, border=2)
+        qr.add_data(upi_link)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="#0F766E", back_color="#F0FDFA")
+        img.save(str(qr_path))
+        log.info(f"UPI QR saved to {qr_path}")
+
+        upi_data = {
+            "upi_id": upi_id,
+            "payee_name": payee_name,
+            "amount": amount,
+            "upi_link": upi_link,
+            "qr_url": "/assets/upi_qr.png",
+            "patient_name": patient_name,
+        }
+        return {"action": "show_upi_payment", "data": upi_data}, {"result": "ok", "upi": upi_data}
 
     return None, {"result": f"unknown tool: {name}"}

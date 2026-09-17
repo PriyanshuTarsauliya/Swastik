@@ -9,7 +9,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from google import genai
@@ -136,6 +137,78 @@ async def ws(websocket: WebSocket):
         except Exception:
             pass
     log.info("ws closed")
+
+
+@app.post("/upload-receipt")
+async def upload_receipt(file: UploadFile = File(...)):
+    """Accept a payment screenshot, verify it with Gemini Vision."""
+    import base64
+
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:  # 10 MB limit
+        return JSONResponse({"verified": False, "reason": "File too large (max 10 MB)"}, status_code=400)
+
+    b64 = base64.b64encode(contents).decode("utf-8")
+    mime = file.content_type or "image/png"
+
+    upi_id = os.getenv("UPI_ID", "6387831138-2@ibl")
+    payee_name = os.getenv("UPI_PAYEE_NAME", "Dr Gunja Gupta")
+
+    verification_prompt = f"""You are a payment receipt verification assistant.
+Analyze this UPI payment screenshot and extract the following details:
+1. Transaction status (Success / Failed / Pending)
+2. Amount paid (in INR)
+3. Payee name or UPI ID
+4. UPI Transaction Reference Number (UTR / Ref ID) if visible
+5. Date and time of transaction if visible
+
+The expected payment is:
+- Amount: ₹499
+- Accepted Payee UPI IDs / Names: {upi_id}, priyanshu@upi, {payee_name}, Priyanshu
+
+Respond ONLY in this exact JSON format, no extra text:
+{{{{
+  "verified": true or false,
+  "status": "Success" or "Failed" or "Pending" or "Unreadable",
+  "amount": "extracted amount or null",
+  "payee": "extracted payee name/UPI ID or null",
+  "utr": "extracted UTR/reference number or null",
+  "timestamp": "extracted date-time or null",
+  "reason": "brief explanation of verification result"
+}}}}
+
+Set verified=true ONLY if:
+- Status is "Success"
+- Amount is ₹499 (or very close, e.g. 499.00)
+- Payee matches any of "{payee_name}", "{upi_id}", "priyanshu@upi", or "Priyanshu" (partial match is OK)
+"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=contents, mime_type=mime),
+                verification_prompt,
+            ],
+        )
+        raw_text = response.text.strip()
+        # Strip markdown code fences if present
+        if raw_text.startswith("```"):
+            raw_text = raw_text.split("\n", 1)[1]  # remove first line
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+
+        import json as json_mod
+        result = json_mod.loads(raw_text)
+        log.info(f"Receipt verification result: {result}")
+        return JSONResponse(result)
+    except Exception as e:
+        log.exception("Receipt verification failed")
+        return JSONResponse(
+            {"verified": False, "reason": f"Verification error: {str(e)}"},
+            status_code=500,
+        )
 
 
 if ASSETS.exists():
